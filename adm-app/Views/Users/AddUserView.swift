@@ -18,7 +18,7 @@ struct AddUserView: View {
                     TextField("Display Name", text: $viewModel.displayName)
                         .textInputAutocapitalization(.words)
                     
-                    TextField("Email", text: $viewModel.email)
+                    TextField("Email (optional)", text: $viewModel.email)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.emailAddress)
                 }
@@ -77,13 +77,13 @@ class AddUserViewModel: ObservableObject {
     private let firebaseManager = FirebaseManager.shared
     
     var isValid: Bool {
-        !displayName.isEmpty && !email.isEmpty && email.isValidEmail
+        !displayName.isEmpty && (email.isEmpty || email.isValidEmail)
     }
     
     func addUser() async {
         let newUser = User(
             displayName: displayName,
-            email: email,
+            email: email.isEmpty ? nil : email,
             joinedAt: Date(),
             lastUpdated: Date(),
             level: level,

@@ -11,9 +11,9 @@ import FirebaseFirestore
 struct User: Identifiable, Codable, Hashable {
     @DocumentID var id: String?
     var displayName: String
-    var email: String
+    var email: String?
     var joinedAt: Date
-    var lastUpdated: Date
+    var lastUpdated: Date?
     var level: Int
     var xp: Int
     
@@ -28,7 +28,7 @@ struct User: Identifiable, Codable, Hashable {
     }
     
     // Initializer for creating new users
-    init(id: String? = nil, displayName: String, email: String, joinedAt: Date = Date(), lastUpdated: Date = Date(), level: Int = 1, xp: Int = 0) {
+    init(id: String? = nil, displayName: String, email: String? = nil, joinedAt: Date = Date(), lastUpdated: Date? = Date(), level: Int = 1, xp: Int = 0) {
         self.id = id
         self.displayName = displayName
         self.email = email

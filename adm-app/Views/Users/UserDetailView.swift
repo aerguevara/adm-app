@@ -38,7 +38,7 @@ struct UserDetailView: View {
                 }
                 
                 LabeledContent("Last Updated") {
-                    Text(viewModel.lastUpdated.mediumDate)
+                    Text(viewModel.lastUpdated?.mediumDate ?? "Never")
                         .foregroundStyle(.secondary)
                 }
             }
@@ -95,7 +95,7 @@ class UserDetailViewModel: ObservableObject {
     @Published var level: Int
     @Published var xp: Int
     @Published var joinedAt: Date
-    @Published var lastUpdated: Date
+    @Published var lastUpdated: Date?
     @Published var showError = false
     @Published var errorMessage = ""
     
@@ -103,13 +103,13 @@ class UserDetailViewModel: ObservableObject {
     private let firebaseManager = FirebaseManager.shared
     
     var isValid: Bool {
-        !displayName.isEmpty && !email.isEmpty && email.isValidEmail
+        !displayName.isEmpty && (email.isEmpty || email.isValidEmail)
     }
     
     init(user: User) {
         self.user = user
         self.displayName = user.displayName
-        self.email = user.email
+        self.email = user.email ?? ""
         self.level = user.level
         self.xp = user.xp
         self.joinedAt = user.joinedAt
@@ -120,7 +120,7 @@ class UserDetailViewModel: ObservableObject {
         let updatedUser = User(
             id: user.id,
             displayName: displayName,
-            email: email,
+            email: email.isEmpty ? nil : email,
             joinedAt: joinedAt,
             lastUpdated: Date(), // Update timestamp
             level: level,

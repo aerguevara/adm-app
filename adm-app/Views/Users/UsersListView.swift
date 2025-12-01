@@ -18,7 +18,7 @@ struct UsersListView: View {
         } else {
             return viewModel.users.filter { user in
                 user.displayName.localizedCaseInsensitiveContains(searchText) ||
-                user.email.localizedCaseInsensitiveContains(searchText)
+                (user.email?.localizedCaseInsensitiveContains(searchText) ?? false)
             }
         }
     }
@@ -110,7 +110,7 @@ struct UserRow: View {
                 }
             }
             
-            Text(user.email)
+            Text(user.email ?? "No email")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             
