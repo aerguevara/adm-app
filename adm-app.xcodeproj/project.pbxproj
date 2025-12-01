@@ -6,6 +6,12 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		DA45093D2EDDA26500D3C493 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = DA45093C2EDDA26500D3C493 /* FirebaseCore */; };
+		DA45093F2EDDA26500D3C493 /* FirebaseDatabase in Frameworks */ = {isa = PBXBuildFile; productRef = DA45093E2EDDA26500D3C493 /* FirebaseDatabase */; };
+		DA4509412EDDA26500D3C493 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = DA4509402EDDA26500D3C493 /* FirebaseFirestore */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		DA4508F82EDD96D000D3C493 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +58,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DA45093F2EDDA26500D3C493 /* FirebaseDatabase in Frameworks */,
+				DA45093D2EDDA26500D3C493 /* FirebaseCore in Frameworks */,
+				DA4509412EDDA26500D3C493 /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +121,9 @@
 			);
 			name = "adm-app";
 			packageProductDependencies = (
+				DA45093C2EDDA26500D3C493 /* FirebaseCore */,
+				DA45093E2EDDA26500D3C493 /* FirebaseDatabase */,
+				DA4509402EDDA26500D3C493 /* FirebaseFirestore */,
 			);
 			productName = "adm-app";
 			productReference = DA4508E72EDD96CE00D3C493 /* adm-app.app */;
@@ -195,6 +207,9 @@
 			);
 			mainGroup = DA4508DE2EDD96CE00D3C493;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				DA45093B2EDDA26500D3C493 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DA4508E82EDD96CE00D3C493 /* Products */;
 			projectDirPath = "";
@@ -411,9 +426,13 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.aerguevara.adm-app";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 2;
 			};
 			name = Debug;
 		};
@@ -440,9 +459,13 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.aerguevara.adm-app";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 2;
 			};
 			name = Release;
 		};
@@ -558,6 +581,35 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		DA45093B2EDDA26500D3C493 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.6.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		DA45093C2EDDA26500D3C493 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DA45093B2EDDA26500D3C493 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+		DA45093E2EDDA26500D3C493 /* FirebaseDatabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DA45093B2EDDA26500D3C493 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseDatabase;
+		};
+		DA4509402EDDA26500D3C493 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DA45093B2EDDA26500D3C493 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = DA4508DF2EDD96CE00D3C493 /* Project object */;
 }
