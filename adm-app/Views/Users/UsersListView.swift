@@ -10,6 +10,7 @@ import SwiftUI
 struct UsersListView: View {
     @StateObject private var viewModel = UsersViewModel()
     @State private var showingAddUser = false
+    @State private var showingDeleteAllAlert = false
     @State private var searchText = ""
     
     var filteredUsers: [User] {
@@ -51,6 +52,15 @@ struct UsersListView: View {
             .navigationTitle("Users")
             .searchable(text: $searchText, prompt: "Search by name or email")
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(role: .destructive) {
+                        showingDeleteAllAlert = true
+                    } label: {
+                        Label("Delete All", systemImage: "trash.fill")
+                    }
+                    .disabled(viewModel.users.isEmpty)
+                }
+                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         showingAddUser = true
@@ -61,6 +71,16 @@ struct UsersListView: View {
             }
             .sheet(isPresented: $showingAddUser) {
                 AddUserView()
+            }
+            .alert("Delete All Users", isPresented: $showingDeleteAllAlert) {
+                Button("Cancel", role: .cancel) {}
+                Button("Delete All", role: .destructive) {
+                    Task {
+                        await viewModel.deleteAllUsers()
+                    }
+                }
+            } message: {
+                Text("Are you sure you want to delete ALL \(viewModel.users.count) users? This action cannot be undone.")
             }
             .alert("Error", isPresented: $viewModel.showError) {
                 Button("OK", role: .cancel) {}
@@ -161,6 +181,23 @@ class UsersViewModel: ObservableObject {
             errorMessage = error.localizedDescription
             showError = true
         }
+    }
+    
+    func deleteAllUsers() async {
+        isLoading = true
+        do {
+            // Delete all users
+            for user in users {
+                if let id = user.id {
+                    try await firebaseManager.deleteUser(id: id)
+                }
+            }
+            await loadUsers() // Reload list
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+        isLoading = false
     }
 }
 

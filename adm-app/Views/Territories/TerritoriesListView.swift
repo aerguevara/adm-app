@@ -10,6 +10,7 @@ import SwiftUI
 struct TerritoriesListView: View {
     @StateObject private var viewModel = TerritoriesViewModel()
     @State private var showingAddTerritory = false
+    @State private var showingDeleteAllAlert = false
     @State private var searchText = ""
     
     var filteredTerritories: [RemoteTerritory] {
@@ -52,6 +53,15 @@ struct TerritoriesListView: View {
             .navigationTitle("Territories")
             .searchable(text: $searchText, prompt: "Search by user ID or coordinates")
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(role: .destructive) {
+                        showingDeleteAllAlert = true
+                    } label: {
+                        Label("Delete All", systemImage: "trash.fill")
+                    }
+                    .disabled(viewModel.territories.isEmpty)
+                }
+                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         showingAddTerritory = true
@@ -62,6 +72,16 @@ struct TerritoriesListView: View {
             }
             .sheet(isPresented: $showingAddTerritory) {
                 AddTerritoryView()
+            }
+            .alert("Delete All Territories", isPresented: $showingDeleteAllAlert) {
+                Button("Cancel", role: .cancel) {}
+                Button("Delete All", role: .destructive) {
+                    Task {
+                        await viewModel.deleteAllTerritories()
+                    }
+                }
+            } message: {
+                Text("Are you sure you want to delete ALL \(viewModel.territories.count) territories? This action cannot be undone.")
             }
             .alert("Error", isPresented: $viewModel.showError) {
                 Button("OK", role: .cancel) {}
@@ -178,6 +198,23 @@ class TerritoriesViewModel: ObservableObject {
             errorMessage = error.localizedDescription
             showError = true
         }
+    }
+    
+    func deleteAllTerritories() async {
+        isLoading = true
+        do {
+            // Delete all territories
+            for territory in territories {
+                if let id = territory.id {
+                    try await firebaseManager.deleteTerritory(id: id)
+                }
+            }
+            await loadTerritories()
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+        isLoading = false
     }
 }
 

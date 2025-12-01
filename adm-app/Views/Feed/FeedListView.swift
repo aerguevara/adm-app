@@ -10,6 +10,7 @@ import SwiftUI
 struct FeedListView: View {
     @StateObject private var viewModel = FeedViewModel()
     @State private var showingAddFeed = false
+    @State private var showingDeleteAllAlert = false
     @State private var searchText = ""
     @State private var selectedType: String = "All"
     
@@ -78,15 +79,34 @@ struct FeedListView: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showingAddFeed = true
-                    } label: {
-                        Label("Add Feed Item", systemImage: "plus")
+                    HStack(spacing: 16) {
+                        Button(role: .destructive) {
+                            showingDeleteAllAlert = true
+                        } label: {
+                            Label("Delete All", systemImage: "trash.fill")
+                        }
+                        .disabled(viewModel.feedItems.isEmpty)
+                        
+                        Button {
+                            showingAddFeed = true
+                        } label: {
+                            Label("Add Feed Item", systemImage: "plus")
+                        }
                     }
                 }
             }
             .sheet(isPresented: $showingAddFeed) {
                 AddFeedView()
+            }
+            .alert("Delete All Feed Items", isPresented: $showingDeleteAllAlert) {
+                Button("Cancel", role: .cancel) {}
+                Button("Delete All", role: .destructive) {
+                    Task {
+                        await viewModel.deleteAllFeedItems()
+                    }
+                }
+            } message: {
+                Text("Are you sure you want to delete ALL \(viewModel.feedItems.count) feed items? This action cannot be undone.")
             }
             .alert("Error", isPresented: $viewModel.showError) {
                 Button("OK", role: .cancel) {}
@@ -204,6 +224,23 @@ class FeedViewModel: ObservableObject {
             errorMessage = error.localizedDescription
             showError = true
         }
+    }
+    
+    func deleteAllFeedItems() async {
+        isLoading = true
+        do {
+            // Delete all feed items
+            for item in feedItems {
+                if let id = item.id {
+                    try await firebaseManager.deleteFeedItem(id: id)
+                }
+            }
+            await loadFeedItems()
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+        isLoading = false
     }
 }
 
