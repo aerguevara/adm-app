@@ -14,12 +14,17 @@ class FirebaseManager: ObservableObject {
     static let shared = FirebaseManager()
     private let db = Firestore.firestore()
     
-    private init() {}
+    private init() {
+        // Configure Firestore settings to prefer server data
+        let settings = db.settings
+        settings.cacheSettings = MemoryCacheSettings()
+        db.settings = settings
+    }
     
     // MARK: - Generic CRUD Operations
     
-    func fetchDocuments<T: Decodable>(from collection: String) async throws -> [T] {
-        let snapshot = try await db.collection(collection).getDocuments()
+    func fetchDocuments<T: Decodable>(from collection: String, source: FirestoreSource = .default) async throws -> [T] {
+        let snapshot = try await db.collection(collection).getDocuments(source: source)
         return snapshot.documents.compactMap { document in
             try? document.data(as: T.self)
         }
@@ -66,7 +71,7 @@ class FirebaseManager: ObservableObject {
     // MARK: - Users Specific Operations
     
     func fetchUsers() async throws -> [User] {
-        try await fetchDocuments(from: FirebaseCollection.users)
+        try await fetchDocuments(from: FirebaseCollection.users, source: .server)
     }
     
     func addUser(_ user: User) async throws -> String {
@@ -85,7 +90,7 @@ class FirebaseManager: ObservableObject {
     // MARK: - Feed Specific Operations
     
     func fetchFeedItems() async throws -> [FeedItem] {
-        try await fetchDocuments(from: FirebaseCollection.feed)
+        try await fetchDocuments(from: FirebaseCollection.feed, source: .server)
     }
     
     func addFeedItem(_ item: FeedItem) async throws -> String {
@@ -104,7 +109,7 @@ class FirebaseManager: ObservableObject {
     // MARK: - Territory Specific Operations
     
     func fetchTerritories() async throws -> [RemoteTerritory] {
-        try await fetchDocuments(from: FirebaseCollection.territories)
+        try await fetchDocuments(from: FirebaseCollection.territories, source: .server)
     }
     
     func addTerritory(_ territory: RemoteTerritory) async throws -> String {

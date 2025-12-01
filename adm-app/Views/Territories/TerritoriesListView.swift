@@ -68,6 +68,13 @@ struct TerritoriesListView: View {
             } message: {
                 Text(viewModel.errorMessage)
             }
+            .onAppear {
+                if viewModel.territories.isEmpty {
+                    Task {
+                        await viewModel.loadTerritories()
+                    }
+                }
+            }
         }
         .task {
             await viewModel.loadTerritories()

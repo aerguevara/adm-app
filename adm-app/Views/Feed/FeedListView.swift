@@ -93,6 +93,13 @@ struct FeedListView: View {
             } message: {
                 Text(viewModel.errorMessage)
             }
+            .onAppear {
+                if viewModel.feedItems.isEmpty {
+                    Task {
+                        await viewModel.loadFeedItems()
+                    }
+                }
+            }
         }
         .task {
             await viewModel.loadFeedItems()

@@ -67,6 +67,13 @@ struct UsersListView: View {
             } message: {
                 Text(viewModel.errorMessage)
             }
+            .onAppear {
+                if viewModel.users.isEmpty {
+                    Task {
+                        await viewModel.loadUsers()
+                    }
+                }
+            }
         }
         .task {
             await viewModel.loadUsers()
