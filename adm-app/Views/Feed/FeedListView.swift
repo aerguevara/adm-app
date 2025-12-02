@@ -14,20 +14,21 @@ struct FeedListView: View {
     @State private var searchText = ""
     @State private var selectedType: String = "All"
     
-    var filteredFeedItems: [FeedItem] {
-        var items = viewModel.feedItems
+    var filteredFeedItems: [FeedItemWithUser] {
+        var items = viewModel.feedItemsWithUsers
         
         // Filter by type
         if selectedType != "All" {
-            items = items.filter { $0.type == selectedType }
+            items = items.filter { $0.feedItem.type == selectedType }
         }
         
         // Filter by search
         if !searchText.isEmpty {
             items = items.filter { item in
-                item.title.localizedCaseInsensitiveContains(searchText) ||
-                item.subtitle.localizedCaseInsensitiveContains(searchText) ||
-                item.userId.localizedCaseInsensitiveContains(searchText)
+                item.feedItem.title.localizedCaseInsensitiveContains(searchText) ||
+                item.feedItem.subtitle.localizedCaseInsensitiveContains(searchText) ||
+                item.displayName.localizedCaseInsensitiveContains(searchText) ||
+                item.feedItem.userId.localizedCaseInsensitiveContains(searchText)
             }
         }
         
@@ -52,7 +53,7 @@ struct FeedListView: View {
                 } else {
                     List {
                         ForEach(filteredFeedItems) { item in
-                            NavigationLink(destination: FeedDetailView(feedItem: item)) {
+                            NavigationLink(destination: FeedDetailView(feedItem: item.feedItem)) {
                                 FeedRow(item: item)
                             }
                         }
@@ -85,7 +86,7 @@ struct FeedListView: View {
                         } label: {
                             Label("Delete All", systemImage: "trash.fill")
                         }
-                        .disabled(viewModel.feedItems.isEmpty)
+                        .disabled(viewModel.feedItemsWithUsers.isEmpty)
                         
                         Button {
                             showingAddFeed = true
@@ -106,7 +107,7 @@ struct FeedListView: View {
                     }
                 }
             } message: {
-                Text("Are you sure you want to delete ALL \(viewModel.feedItems.count) feed items? This action cannot be undone.")
+                Text("Are you sure you want to delete ALL \(viewModel.feedItemsWithUsers.count) feed items? This action cannot be undone.")
             }
             .alert("Error", isPresented: $viewModel.showError) {
                 Button("OK", role: .cancel) {}
@@ -114,7 +115,7 @@ struct FeedListView: View {
                 Text(viewModel.errorMessage)
             }
             .onAppear {
-                if viewModel.feedItems.isEmpty {
+                if viewModel.feedItemsWithUsers.isEmpty {
                     Task {
                         await viewModel.loadFeedItems()
                     }
@@ -130,51 +131,89 @@ struct FeedListView: View {
         Task {
             for index in offsets {
                 let item = filteredFeedItems[index]
-                await viewModel.deleteFeedItem(item)
+                await viewModel.deleteFeedItem(item.feedItem)
             }
         }
     }
 }
 
 struct FeedRow: View {
-    let item: FeedItem
+    let item: FeedItemWithUser
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(item.title)
+                Text(item.feedItem.title)
                     .font(.headline)
                 Spacer()
                 HStack(spacing: 4) {
                     Image(systemName: "sparkles")
-                        .foregroundStyle(Color.rarityColor(for: item.rarity))
+                        .foregroundStyle(Color.rarityColor(for: item.feedItem.rarity))
                         .font(.caption2)
-                    Text(item.rarity.capitalized)
+                    Text(item.feedItem.rarity.capitalized)
                         .font(.caption)
                         .fontWeight(.semibold)
-                        .foregroundStyle(Color.rarityColor(for: item.rarity))
+                        .foregroundStyle(Color.rarityColor(for: item.feedItem.rarity))
                 }
             }
             
-            Text(item.subtitle)
+            Text(item.feedItem.subtitle)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
             
+            // User information section
+            HStack(spacing: 8) {
+                Image(systemName: "person.circle.fill")
+                    .foregroundStyle(.blue)
+                    .font(.caption)
+                
+                Text(item.displayName)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.primary)
+                
+                if item.userLevel > 0 {
+                    HStack(spacing: 2) {
+                        Image(systemName: "star.fill")
+                            .foregroundStyle(.yellow)
+                            .font(.caption2)
+                        Text("Lv \(item.userLevel)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                
+                if item.userXP > 0 {
+                    HStack(spacing: 2) {
+                        Image(systemName: "bolt.fill")
+                            .foregroundStyle(.orange)
+                            .font(.caption2)
+                        Text("\(item.userXP) XP")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(.vertical, 2)
+            .padding(.horizontal, 8)
+            .background(Color.blue.opacity(0.08))
+            .cornerRadius(6)
+            
             HStack {
-                Label(item.type, systemImage: typeIcon(for: item.type))
+                Label(item.feedItem.type, systemImage: typeIcon(for: item.feedItem.type))
                     .font(.caption)
                     .foregroundStyle(.blue)
                 
-                if item.xpEarned > 0 {
-                    Label("+\(item.xpEarned) XP", systemImage: "bolt.fill")
+                if item.feedItem.xpEarned > 0 {
+                    Label("+\(item.feedItem.xpEarned) XP", systemImage: "bolt.fill")
                         .font(.caption)
                         .foregroundStyle(.orange)
                 }
                 
                 Spacer()
                 
-                Text(item.date.shortDate)
+                Text(item.feedItem.date.shortDate)
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
@@ -195,7 +234,7 @@ struct FeedRow: View {
 
 @MainActor
 class FeedViewModel: ObservableObject {
-    @Published var feedItems: [FeedItem] = []
+    @Published var feedItemsWithUsers: [FeedItemWithUser] = []
     @Published var isLoading = false
     @Published var showError = false
     @Published var errorMessage = ""
@@ -205,8 +244,24 @@ class FeedViewModel: ObservableObject {
     func loadFeedItems() async {
         isLoading = true
         do {
-            feedItems = try await firebaseManager.fetchFeedItems()
-            feedItems.sort { $0.date > $1.date } // Most recent first
+            // Fetch feed items and users in parallel
+            async let feedItemsTask = firebaseManager.fetchFeedItems()
+            async let usersTask = firebaseManager.fetchUsers()
+            
+            let feedItems = try await feedItemsTask
+            let users = try await usersTask
+            
+            // Create a dictionary for quick user lookup
+            let userDict = Dictionary(uniqueKeysWithValues: users.map { ($0.id ?? "", $0) })
+            
+            // Combine feed items with user data
+            feedItemsWithUsers = feedItems.map { feedItem in
+                let user = userDict[feedItem.userId]
+                return FeedItemWithUser(feedItem: feedItem, user: user)
+            }
+            
+            // Sort by date, most recent first
+            feedItemsWithUsers.sort { $0.feedItem.date > $1.feedItem.date }
         } catch {
             errorMessage = error.localizedDescription
             showError = true
@@ -230,8 +285,8 @@ class FeedViewModel: ObservableObject {
         isLoading = true
         do {
             // Delete all feed items
-            for item in feedItems {
-                if let id = item.id {
+            for item in feedItemsWithUsers {
+                if let id = item.feedItem.id {
                     try await firebaseManager.deleteFeedItem(id: id)
                 }
             }

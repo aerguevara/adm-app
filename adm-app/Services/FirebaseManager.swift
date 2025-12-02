@@ -87,6 +87,18 @@ class FirebaseManager: ObservableObject {
         try await deleteDocument(from: FirebaseCollection.users, id: id)
     }
     
+    func batchUpdateUsers(_ users: [User]) async throws {
+        let batch = db.batch()
+        
+        for user in users {
+            guard let id = user.id else { continue }
+            let docRef = db.collection(FirebaseCollection.users).document(id)
+            try batch.setData(from: user, forDocument: docRef, merge: true)
+        }
+        
+        try await batch.commit()
+    }
+    
     // MARK: - Feed Specific Operations
     
     func fetchFeedItems() async throws -> [FeedItem] {

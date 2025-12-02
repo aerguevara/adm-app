@@ -16,6 +16,7 @@ struct User: Identifiable, Codable, Hashable {
     var lastUpdated: Date?
     var level: Int
     var xp: Int
+    var previousRank: Int?
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -25,10 +26,11 @@ struct User: Identifiable, Codable, Hashable {
         case lastUpdated
         case level
         case xp
+        case previousRank
     }
     
     // Initializer for creating new users
-    init(id: String? = nil, displayName: String, email: String? = nil, joinedAt: Date = Date(), lastUpdated: Date? = Date(), level: Int = 1, xp: Int = 0) {
+    init(id: String? = nil, displayName: String, email: String? = nil, joinedAt: Date = Date(), lastUpdated: Date? = Date(), level: Int = 1, xp: Int = 0, previousRank: Int? = nil) {
         self.id = id
         self.displayName = displayName
         self.email = email
@@ -36,5 +38,6 @@ struct User: Identifiable, Codable, Hashable {
         self.lastUpdated = lastUpdated
         self.level = level
         self.xp = xp
+        self.previousRank = previousRank
     }
 }

@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import FirebaseFirestore
 
 struct UsersListView: View {
     @StateObject private var viewModel = UsersViewModel()
@@ -57,6 +58,17 @@ struct UsersListView: View {
                         showingDeleteAllAlert = true
                     } label: {
                         Label("Delete All", systemImage: "trash.fill")
+                    }
+                    .disabled(viewModel.users.isEmpty)
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        Task {
+                            await viewModel.closeWeeklyRanking()
+                        }
+                    } label: {
+                        Label("Close Ranking", systemImage: "trophy.circle")
                     }
                     .disabled(viewModel.users.isEmpty)
                 }
@@ -158,17 +170,24 @@ class UsersViewModel: ObservableObject {
     @Published var errorMessage = ""
     
     private let firebaseManager = FirebaseManager.shared
+    private var listenerRegistration: ListenerRegistration?
+    
+    deinit {
+        listenerRegistration?.remove()
+    }
     
     func loadUsers() async {
+        // If we are already listening, no need to do anything
+        guard listenerRegistration == nil else { return }
+        
         isLoading = true
-        do {
-            users = try await firebaseManager.fetchUsers()
-            users.sort { $0.joinedAt > $1.joinedAt } // Most recent first
-        } catch {
-            errorMessage = error.localizedDescription
-            showError = true
+        
+        listenerRegistration = firebaseManager.listenToCollection(FirebaseCollection.users) { [weak self] (users: [User]) in
+            guard let self = self else { return }
+            
+            self.users = users.sorted { $0.joinedAt > $1.joinedAt }
+            self.isLoading = false
         }
-        isLoading = false
     }
     
     func deleteUser(_ user: User) async {
@@ -176,7 +195,7 @@ class UsersViewModel: ObservableObject {
         
         do {
             try await firebaseManager.deleteUser(id: id)
-            await loadUsers() // Reload list
+            // No need to reload, listener will handle it
         } catch {
             errorMessage = error.localizedDescription
             showError = true
@@ -192,11 +211,37 @@ class UsersViewModel: ObservableObject {
                     try await firebaseManager.deleteUser(id: id)
                 }
             }
-            await loadUsers() // Reload list
+            // No need to reload, listener will handle it
         } catch {
             errorMessage = error.localizedDescription
             showError = true
         }
+        isLoading = false
+    }
+    
+    func closeWeeklyRanking() async {
+        isLoading = true
+        
+        // 1. Get current users sorted by XP
+        let sortedUsers = users.sorted { $0.xp > $1.xp }
+        
+        // 2. Update previousRank for each user
+        var usersToUpdate: [User] = []
+        
+        for (index, user) in sortedUsers.enumerated() {
+            var updatedUser = user
+            updatedUser.previousRank = index + 1
+            usersToUpdate.append(updatedUser)
+        }
+        
+        // 3. Batch update
+        do {
+            try await firebaseManager.batchUpdateUsers(usersToUpdate)
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+        
         isLoading = false
     }
 }

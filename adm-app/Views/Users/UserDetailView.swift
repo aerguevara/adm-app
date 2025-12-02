@@ -29,6 +29,8 @@ struct UserDetailView: View {
                 Stepper("Level: \(viewModel.level)", value: $viewModel.level, in: 1...100)
                 
                 Stepper("XP: \(viewModel.xp)", value: $viewModel.xp, in: 0...999999, step: 10)
+                
+                Stepper("Previous Rank: \(viewModel.previousRank)", value: $viewModel.previousRank, in: 0...9999)
             }
             
             Section("Timestamps") {
@@ -94,6 +96,7 @@ class UserDetailViewModel: ObservableObject {
     @Published var email: String
     @Published var level: Int
     @Published var xp: Int
+    @Published var previousRank: Int
     @Published var joinedAt: Date
     @Published var lastUpdated: Date?
     @Published var showError = false
@@ -112,6 +115,7 @@ class UserDetailViewModel: ObservableObject {
         self.email = user.email ?? ""
         self.level = user.level
         self.xp = user.xp
+        self.previousRank = user.previousRank ?? 0
         self.joinedAt = user.joinedAt
         self.lastUpdated = user.lastUpdated
     }
@@ -124,7 +128,8 @@ class UserDetailViewModel: ObservableObject {
             joinedAt: joinedAt,
             lastUpdated: Date(), // Update timestamp
             level: level,
-            xp: xp
+            xp: xp,
+            previousRank: previousRank == 0 ? nil : previousRank
         )
         
         do {
