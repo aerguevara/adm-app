@@ -12,7 +12,9 @@ struct UsersListView: View {
     @StateObject private var viewModel = UsersViewModel()
     @State private var showingAddUser = false
     @State private var showingDeleteAllAlert = false
+    @State private var showingResetAlert = false
     @State private var searchText = ""
+    @State private var userToReset: User?
     
     var filteredUsers: [User] {
         if searchText.isEmpty {
@@ -27,7 +29,29 @@ struct UsersListView: View {
     
     var body: some View {
         NavigationStack {
-            Group {
+            List {
+                ForEach(filteredUsers) { user in
+                    HStack {
+                        NavigationLink(destination: UserDetailView(user: user)) {
+                            UserRow(user: user)
+                        }
+                        Spacer()
+                        Button(role: .destructive) {
+                            userToReset = user
+                            showingResetAlert = true
+                        } label: {
+                            Label("Reset", systemImage: "arrow.counterclockwise.circle")
+                                .labelStyle(.iconOnly)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.orange)
+                        .controlSize(.regular)
+                        .padding(.leading, 8)
+                    }
+                }
+                .onDelete(perform: deleteUsers)
+            }
+            .overlay {
                 if viewModel.isLoading {
                     ProgressView("Loading users...")
                 } else if filteredUsers.isEmpty {
@@ -36,22 +60,13 @@ struct UsersListView: View {
                     } description: {
                         Text(searchText.isEmpty ? "No users found in the database" : "No users match '\(searchText)'")
                     }
-                } else {
-                    List {
-                        ForEach(filteredUsers) { user in
-                            NavigationLink(destination: UserDetailView(user: user)) {
-                                UserRow(user: user)
-                            }
-                        }
-                        .onDelete(perform: deleteUsers)
-                    }
-                    .refreshable {
-                        await viewModel.loadUsers()
-                    }
                 }
             }
             .navigationTitle("Users")
             .searchable(text: $searchText, prompt: "Search by name or email")
+            .refreshable {
+                await viewModel.loadUsers(forceReload: true)
+            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(role: .destructive) {
@@ -83,6 +98,19 @@ struct UsersListView: View {
             }
             .sheet(isPresented: $showingAddUser) {
                 AddUserView()
+            }
+            .alert("Reset data for \(userToReset?.displayName ?? "this user")?", isPresented: $showingResetAlert, presenting: userToReset) { selected in
+                Button("Cancel", role: .cancel) {
+                    userToReset = nil
+                }
+                Button("Reset", role: .destructive) {
+                    Task {
+                        await viewModel.deleteUserData(for: selected)
+                        userToReset = nil
+                    }
+                }
+            } message: { selected in
+                Text("This will reset XP to 0 and delete feed and territories for \(selected.displayName). The user account will remain.")
             }
             .alert("Delete All Users", isPresented: $showingDeleteAllAlert) {
                 Button("Cancel", role: .cancel) {}
@@ -176,9 +204,14 @@ class UsersViewModel: ObservableObject {
         listenerRegistration?.remove()
     }
     
-    func loadUsers() async {
-        // If we are already listening, no need to do anything
-        guard listenerRegistration == nil else { return }
+    func loadUsers(forceReload: Bool = false) async {
+        if forceReload {
+            listenerRegistration?.remove()
+            listenerRegistration = nil
+        } else {
+            // If we are already listening, no need to do anything
+            guard listenerRegistration == nil else { return }
+        }
         
         isLoading = true
         
@@ -200,6 +233,39 @@ class UsersViewModel: ObservableObject {
             errorMessage = error.localizedDescription
             showError = true
         }
+    }
+    
+    func deleteUserData(for user: User) async {
+        guard let userId = user.id else { return }
+        isLoading = true
+        do {
+            // Reset user XP
+            var updatedUser = user
+            updatedUser.xp = 0
+            try await firebaseManager.updateUser(updatedUser)
+            
+            // Delete feed items for user
+            let feedItems = try await firebaseManager.fetchFeedItems(for: userId)
+            for item in feedItems {
+                if let id = item.id {
+                    try await firebaseManager.deleteFeedItem(id: id)
+                }
+            }
+            
+            // Delete territories for user
+            let territories = try await firebaseManager.fetchTerritories(for: userId)
+            for territory in territories {
+                if let id = territory.id {
+                    try await firebaseManager.deleteTerritory(id: id)
+                }
+            }
+            
+            await loadUsers(forceReload: true)
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+        isLoading = false
     }
     
     func deleteAllUsers() async {

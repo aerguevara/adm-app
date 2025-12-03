@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import MapKit
 
 struct TerritoryDetailView: View {
     @Environment(\.dismiss) private var dismiss
@@ -19,6 +20,15 @@ struct TerritoryDetailView: View {
     
     var body: some View {
         Form {
+            Section("Mapa") {
+                TerritoryMapPreview(
+                    boundary: viewModel.territory.boundary,
+                    center: CLLocationCoordinate2D(latitude: viewModel.centerLatitude, longitude: viewModel.centerLongitude)
+                )
+                .frame(height: 240)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+            
             Section("Status") {
                 HStack {
                     Text(viewModel.territory.isExpired ? "Expired" : "Active")
@@ -128,6 +138,68 @@ struct TerritoryDetailView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(viewModel.errorMessage)
+        }
+    }
+}
+
+struct TerritoryMapPreview: UIViewRepresentable {
+    let boundary: [Coordinate]
+    let center: CLLocationCoordinate2D
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+    
+    func makeUIView(context: Context) -> MKMapView {
+        let mapView = MKMapView()
+        mapView.delegate = context.coordinator
+        mapView.isUserInteractionEnabled = false
+        mapView.pointOfInterestFilter = .excludingAll
+        mapView.showsCompass = false
+        mapView.isRotateEnabled = false
+        mapView.isPitchEnabled = false
+        mapView.isScrollEnabled = false
+        mapView.isZoomEnabled = false
+        return mapView
+    }
+    
+    func updateUIView(_ mapView: MKMapView, context: Context) {
+        mapView.delegate = context.coordinator
+        mapView.removeOverlays(mapView.overlays)
+        
+        if !boundary.isEmpty {
+            let coords = boundary.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
+            let polygon = MKPolygon(coordinates: coords, count: coords.count)
+            mapView.addOverlay(polygon)
+            
+            let rect = polygon.boundingMapRect
+            if !rect.isNull {
+                mapView.setVisibleMapRect(
+                    rect,
+                    edgePadding: UIEdgeInsets(top: 32, left: 32, bottom: 32, right: 32),
+                    animated: false
+                )
+            }
+        } else {
+            let region = MKCoordinateRegion(
+                center: center,
+                latitudinalMeters: 500,
+                longitudinalMeters: 500
+            )
+            mapView.setRegion(region, animated: false)
+        }
+    }
+    
+    class Coordinator: NSObject, MKMapViewDelegate {
+        func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+            guard let polygon = overlay as? MKPolygon else {
+                return MKOverlayRenderer(overlay: overlay)
+            }
+            let renderer = MKPolygonRenderer(polygon: polygon)
+            renderer.fillColor = UIColor.systemGreen.withAlphaComponent(0.25)
+            renderer.strokeColor = UIColor.systemGreen
+            renderer.lineWidth = 2
+            return renderer
         }
     }
 }

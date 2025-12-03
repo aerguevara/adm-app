@@ -102,7 +102,29 @@ class FirebaseManager: ObservableObject {
     // MARK: - Feed Specific Operations
     
     func fetchFeedItems() async throws -> [FeedItem] {
-        try await fetchDocuments(from: FirebaseCollection.feed, source: .server)
+        let snapshot = try await db.collection(FirebaseCollection.feed).getDocuments(source: .server)
+        return snapshot.documents.compactMap { document in
+            var item = try? document.data(as: FeedItem.self)
+            // Ensure we keep the Firestore document ID even if it's not stored as a field
+            if item?.id == nil {
+                item?.id = document.documentID
+            }
+            return item
+        }
+    }
+    
+    func fetchFeedItems(for userId: String) async throws -> [FeedItem] {
+        let snapshot = try await db.collection(FirebaseCollection.feed)
+            .whereField("userId", isEqualTo: userId)
+            .getDocuments(source: .server)
+        
+        return snapshot.documents.compactMap { document in
+            var item = try? document.data(as: FeedItem.self)
+            if item?.id == nil {
+                item?.id = document.documentID
+            }
+            return item
+        }
     }
     
     func addFeedItem(_ item: FeedItem) async throws -> String {
@@ -122,6 +144,36 @@ class FirebaseManager: ObservableObject {
     
     func fetchTerritories() async throws -> [RemoteTerritory] {
         try await fetchDocuments(from: FirebaseCollection.territories, source: .server)
+    }
+    
+    func fetchTerritories(for userId: String) async throws -> [RemoteTerritory] {
+        let snapshot = try await db.collection(FirebaseCollection.territories)
+            .whereField("userId", isEqualTo: userId)
+            .getDocuments(source: .server)
+        
+        return snapshot.documents.compactMap { document in
+            try? document.data(as: RemoteTerritory.self)
+        }
+    }
+    
+    func fetchActivities(for userId: String) async throws -> [ActivitySession] {
+        let snapshot = try await db.collection(FirebaseCollection.users)
+            .document(userId)
+            .collection("activities")
+            .getDocuments(source: .server)
+        
+        return snapshot.documents.compactMap { document in
+            // Prefer typed decoding; if it fails return a tolerant manual parse
+            if let session = try? document.data(as: ActivitySession.self) {
+                var sessionWithId = session
+                if sessionWithId.id == nil {
+                    sessionWithId.id = document.documentID
+                }
+                return sessionWithId
+            } else {
+                return ActivitySession.from(document: document)
+            }
+        }
     }
     
     func addTerritory(_ territory: RemoteTerritory) async throws -> String {

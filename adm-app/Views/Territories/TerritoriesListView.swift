@@ -12,54 +12,85 @@ struct TerritoriesListView: View {
     @State private var showingAddTerritory = false
     @State private var showingDeleteAllAlert = false
     @State private var searchText = ""
+    @State private var selectedUserId: String = TerritoriesListView.allUsersFilterId
     
-    var filteredTerritories: [RemoteTerritory] {
-        if searchText.isEmpty {
-            return viewModel.territories
-        } else {
-            return viewModel.territories.filter { territory in
-                territory.userId.localizedCaseInsensitiveContains(searchText) ||
-                String(territory.centerLatitude).contains(searchText) ||
-                String(territory.centerLongitude).contains(searchText)
-            }
+    private static let allUsersFilterId = "__all_users__"
+    
+    var filteredTerritories: [TerritoryWithUser] {
+        var territories = viewModel.territoriesWithUsers
+        
+        if selectedUserId != TerritoriesListView.allUsersFilterId {
+            territories = territories.filter { $0.territory.userId == selectedUserId }
         }
+        
+        if searchText.isEmpty {
+            return territories
+        }
+        
+        return territories.filter { territory in
+            territory.territory.userId.localizedCaseInsensitiveContains(searchText) ||
+            territory.displayName.localizedCaseInsensitiveContains(searchText) ||
+            String(territory.territory.centerLatitude).contains(searchText) ||
+            String(territory.territory.centerLongitude).contains(searchText)
+        }
+    }
+    
+    var userFilterOptions: [(id: String, name: String)] {
+        let userDictionary = viewModel.territoriesWithUsers.reduce(into: [String: String]()) { result, item in
+            result[item.territory.userId] = item.displayName
+        }
+        
+        let sortedUsers = userDictionary
+            .map { ($0.key, $0.value) }
+            .sorted { $0.1.localizedCaseInsensitiveCompare($1.1) == .orderedAscending }
+        
+        return [(TerritoriesListView.allUsersFilterId, "All Users")] + sortedUsers
     }
     
     var body: some View {
         NavigationStack {
-            Group {
+            List {
+                ForEach(filteredTerritories) { territoryWithUser in
+                    NavigationLink(destination: TerritoryDetailView(territory: territoryWithUser.territory)) {
+                        TerritoryRow(territory: territoryWithUser)
+                    }
+                }
+                .onDelete(perform: deleteTerritories)
+            }
+            .overlay {
                 if viewModel.isLoading {
                     ProgressView("Loading territories...")
                 } else if filteredTerritories.isEmpty {
                     ContentUnavailableView {
-                        Label("No Territories", systemImage: "map.slash")
+                        Label("No Territories", systemImage: "map")
                     } description: {
                         Text(searchText.isEmpty ? "No territories found" : "No territories match '\(searchText)'")
-                    }
-                } else {
-                    List {
-                        ForEach(filteredTerritories) { territory in
-                            NavigationLink(destination: TerritoryDetailView(territory: territory)) {
-                                TerritoryRow(territory: territory)
-                            }
-                        }
-                        .onDelete(perform: deleteTerritories)
-                    }
-                    .refreshable {
-                        await viewModel.loadTerritories()
                     }
                 }
             }
             .navigationTitle("Territories")
-            .searchable(text: $searchText, prompt: "Search by user ID or coordinates")
+            .searchable(text: $searchText, prompt: "Search by user name/ID or coordinates")
+            .refreshable {
+                await viewModel.loadTerritories()
+            }
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItemGroup(placement: .navigationBarLeading) {
                     Button(role: .destructive) {
                         showingDeleteAllAlert = true
                     } label: {
                         Label("Delete All", systemImage: "trash.fill")
                     }
-                    .disabled(viewModel.territories.isEmpty)
+                    .disabled(viewModel.territoriesWithUsers.isEmpty)
+                    
+                    Menu {
+                        Picker("Filter by User", selection: $selectedUserId) {
+                            ForEach(userFilterOptions, id: \.id) { option in
+                                Text(option.name).tag(option.id)
+                            }
+                        }
+                    } label: {
+                        Label("User Filter", systemImage: "person.2.circle")
+                    }
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -77,11 +108,12 @@ struct TerritoriesListView: View {
                 Button("Cancel", role: .cancel) {}
                 Button("Delete All", role: .destructive) {
                     Task {
-                        await viewModel.deleteAllTerritories()
+                        let filter = selectedUserId == TerritoriesListView.allUsersFilterId ? nil : selectedUserId
+                        await viewModel.deleteAllTerritories(filterUserId: filter)
                     }
                 }
             } message: {
-                Text("Are you sure you want to delete ALL \(viewModel.territories.count) territories? This action cannot be undone.")
+                Text("Are you sure you want to delete \(filteredTerritories.count) territories? This action cannot be undone.")
             }
             .alert("Error", isPresented: $viewModel.showError) {
                 Button("OK", role: .cancel) {}
@@ -89,7 +121,7 @@ struct TerritoriesListView: View {
                 Text(viewModel.errorMessage)
             }
             .onAppear {
-                if viewModel.territories.isEmpty {
+                if viewModel.territoriesWithUsers.isEmpty {
                     Task {
                         await viewModel.loadTerritories()
                     }
@@ -107,12 +139,15 @@ struct TerritoriesListView: View {
                 let territory = filteredTerritories[index]
                 await viewModel.deleteTerritory(territory)
             }
+            if selectedUserId != TerritoriesListView.allUsersFilterId {
+                await viewModel.loadTerritories()
+            }
         }
     }
 }
 
 struct TerritoryRow: View {
-    let territory: RemoteTerritory
+    let territory: TerritoryWithUser
     
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -122,7 +157,7 @@ struct TerritoryRow: View {
                 
                 Spacer()
                 
-                if territory.isExpired {
+                if territory.territory.isExpired {
                     Label("Expired", systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)
                         .foregroundStyle(.red)
@@ -135,18 +170,18 @@ struct TerritoryRow: View {
             
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Center: \(String(format: "%.4f", territory.centerLatitude)), \(String(format: "%.4f", territory.centerLongitude))")
+                    Text("Center: \(String(format: "%.4f", territory.territory.centerLatitude)), \(String(format: "%.4f", territory.territory.centerLongitude))")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     
-                    Text("\(territory.boundary.count) boundary points")
+                    Text("\(territory.territory.boundary.count) boundary points")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
             
             HStack {
-                Label(territory.userId, systemImage: "person.fill")
+                Label(territory.displayName, systemImage: "person.fill")
                     .font(.caption)
                     .foregroundStyle(.blue)
                     .lineLimit(1)
@@ -154,12 +189,12 @@ struct TerritoryRow: View {
                 Spacer()
                 
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text("Created: \(territory.timestamp.shortDate)")
+                    Text("Created: \(territory.territory.timestamp.shortDate)")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                    Text("Expires: \(territory.expiresAt.shortDate)")
+                    Text("Expires: \(territory.territory.expiresAt.shortDate)")
                         .font(.caption2)
-                        .foregroundStyle(territory.isExpired ? .red : .secondary)
+                        .foregroundStyle(territory.territory.isExpired ? .red : .secondary)
                 }
             }
         }
@@ -169,7 +204,7 @@ struct TerritoryRow: View {
 
 @MainActor
 class TerritoriesViewModel: ObservableObject {
-    @Published var territories: [RemoteTerritory] = []
+    @Published var territoriesWithUsers: [TerritoryWithUser] = []
     @Published var isLoading = false
     @Published var showError = false
     @Published var errorMessage = ""
@@ -179,8 +214,19 @@ class TerritoriesViewModel: ObservableObject {
     func loadTerritories() async {
         isLoading = true
         do {
-            territories = try await firebaseManager.fetchTerritories()
-            territories.sort { $0.timestamp > $1.timestamp } // Most recent first
+            async let territoriesTask = firebaseManager.fetchTerritories()
+            async let usersTask = firebaseManager.fetchUsers()
+            
+            let territories = try await territoriesTask
+            let users = try await usersTask
+            
+            let userDict = Dictionary(uniqueKeysWithValues: users.map { ($0.id ?? "", $0) })
+            
+            territoriesWithUsers = territories.map { territory in
+                let user = userDict[territory.userId]
+                return TerritoryWithUser(territory: territory, user: user)
+            }
+            territoriesWithUsers.sort { $0.territory.timestamp > $1.territory.timestamp } // Most recent first
         } catch {
             errorMessage = error.localizedDescription
             showError = true
@@ -188,8 +234,8 @@ class TerritoriesViewModel: ObservableObject {
         isLoading = false
     }
     
-    func deleteTerritory(_ territory: RemoteTerritory) async {
-        guard let id = territory.id else { return }
+    func deleteTerritory(_ territory: TerritoryWithUser) async {
+        guard let id = territory.territory.id else { return }
         
         do {
             try await firebaseManager.deleteTerritory(id: id)
@@ -200,12 +246,19 @@ class TerritoriesViewModel: ObservableObject {
         }
     }
     
-    func deleteAllTerritories() async {
+    func deleteAllTerritories(filterUserId: String? = nil) async {
         isLoading = true
         do {
+            let itemsToDelete: [TerritoryWithUser]
+            if let filterUserId = filterUserId {
+                itemsToDelete = territoriesWithUsers.filter { $0.territory.userId == filterUserId }
+            } else {
+                itemsToDelete = territoriesWithUsers
+            }
+            
             // Delete all territories
-            for territory in territories {
-                if let id = territory.id {
+            for territory in itemsToDelete {
+                if let id = territory.territory.id {
                     try await firebaseManager.deleteTerritory(id: id)
                 }
             }

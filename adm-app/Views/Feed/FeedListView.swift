@@ -13,6 +13,9 @@ struct FeedListView: View {
     @State private var showingDeleteAllAlert = false
     @State private var searchText = ""
     @State private var selectedType: String = "All"
+    @State private var selectedUserId: String = FeedListView.allUsersFilterId
+    
+    private static let allUsersFilterId = "__all_users__"
     
     var filteredFeedItems: [FeedItemWithUser] {
         var items = viewModel.feedItemsWithUsers
@@ -20,6 +23,11 @@ struct FeedListView: View {
         // Filter by type
         if selectedType != "All" {
             items = items.filter { $0.feedItem.type == selectedType }
+        }
+        
+        // Filter by user
+        if selectedUserId != FeedListView.allUsersFilterId {
+            items = items.filter { $0.feedItem.userId == selectedUserId }
         }
         
         // Filter by search
@@ -39,9 +47,29 @@ struct FeedListView: View {
         ["All"] + FeedType.allCases.map { $0.rawValue }
     }
     
+    var userFilterOptions: [(id: String, name: String)] {
+        let userDictionary = viewModel.feedItemsWithUsers.reduce(into: [String: String]()) { result, item in
+            result[item.feedItem.userId] = item.displayName
+        }
+        
+        let sortedUsers = userDictionary
+            .map { ($0.key, $0.value) }
+            .sorted { $0.1.localizedCaseInsensitiveCompare($1.1) == .orderedAscending }
+        
+        return [(FeedListView.allUsersFilterId, "All Users")] + sortedUsers
+    }
+    
     var body: some View {
         NavigationStack {
-            Group {
+            List {
+                ForEach(filteredFeedItems) { item in
+                    NavigationLink(destination: FeedDetailView(feedItem: item.feedItem)) {
+                        FeedRow(item: item)
+                    }
+                }
+                .onDelete(perform: deleteFeedItems)
+            }
+            .overlay {
                 if viewModel.isLoading {
                     ProgressView("Loading feed...")
                 } else if filteredFeedItems.isEmpty {
@@ -50,24 +78,15 @@ struct FeedListView: View {
                     } description: {
                         Text(searchText.isEmpty ? "No feed items found" : "No items match '\(searchText)'")
                     }
-                } else {
-                    List {
-                        ForEach(filteredFeedItems) { item in
-                            NavigationLink(destination: FeedDetailView(feedItem: item.feedItem)) {
-                                FeedRow(item: item)
-                            }
-                        }
-                        .onDelete(perform: deleteFeedItems)
-                    }
-                    .refreshable {
-                        await viewModel.loadFeedItems()
-                    }
                 }
             }
             .navigationTitle("Feed")
             .searchable(text: $searchText, prompt: "Search feed items")
+            .refreshable {
+                await viewModel.loadFeedItems()
+            }
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItemGroup(placement: .navigationBarLeading) {
                     Menu {
                         Picker("Filter by Type", selection: $selectedType) {
                             ForEach(feedTypes, id: \.self) { type in
@@ -77,22 +96,30 @@ struct FeedListView: View {
                     } label: {
                         Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
                     }
+                    
+                    Menu {
+                        Picker("Filter by User", selection: $selectedUserId) {
+                            ForEach(userFilterOptions, id: \.id) { option in
+                                Text(option.name).tag(option.id)
+                            }
+                        }
+                    } label: {
+                        Label("User Filter", systemImage: "person.2.circle")
+                    }
                 }
                 
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack(spacing: 16) {
-                        Button(role: .destructive) {
-                            showingDeleteAllAlert = true
-                        } label: {
-                            Label("Delete All", systemImage: "trash.fill")
-                        }
-                        .disabled(viewModel.feedItemsWithUsers.isEmpty)
-                        
-                        Button {
-                            showingAddFeed = true
-                        } label: {
-                            Label("Add Feed Item", systemImage: "plus")
-                        }
+                ToolbarItemGroup(placement: .navigationBarTrailing) {
+                    Button(role: .destructive) {
+                        showingDeleteAllAlert = true
+                    } label: {
+                        Label("Delete All", systemImage: "trash.fill")
+                    }
+                    .disabled(viewModel.feedItemsWithUsers.isEmpty)
+                    
+                    Button {
+                        showingAddFeed = true
+                    } label: {
+                        Label("Add Feed Item", systemImage: "plus")
                     }
                 }
             }
@@ -103,11 +130,12 @@ struct FeedListView: View {
                 Button("Cancel", role: .cancel) {}
                 Button("Delete All", role: .destructive) {
                     Task {
-                        await viewModel.deleteAllFeedItems()
+                        let filter = selectedUserId == FeedListView.allUsersFilterId ? nil : selectedUserId
+                        await viewModel.deleteAllFeedItems(filterUserId: filter)
                     }
                 }
             } message: {
-                Text("Are you sure you want to delete ALL \(viewModel.feedItemsWithUsers.count) feed items? This action cannot be undone.")
+                Text("Are you sure you want to delete \(filteredFeedItems.count) feed items? This action cannot be undone.")
             }
             .alert("Error", isPresented: $viewModel.showError) {
                 Button("OK", role: .cancel) {}
@@ -132,6 +160,10 @@ struct FeedListView: View {
             for index in offsets {
                 let item = filteredFeedItems[index]
                 await viewModel.deleteFeedItem(item.feedItem)
+            }
+            // If a user filter is active, reload to ensure filtered view reflects deletions
+            if selectedUserId != FeedListView.allUsersFilterId {
+                await viewModel.loadFeedItems()
             }
         }
     }
@@ -281,11 +313,17 @@ class FeedViewModel: ObservableObject {
         }
     }
     
-    func deleteAllFeedItems() async {
+    func deleteAllFeedItems(filterUserId: String? = nil) async {
         isLoading = true
         do {
-            // Delete all feed items
-            for item in feedItemsWithUsers {
+            let itemsToDelete: [FeedItemWithUser]
+            if let filterUserId = filterUserId {
+                itemsToDelete = feedItemsWithUsers.filter { $0.feedItem.userId == filterUserId }
+            } else {
+                itemsToDelete = feedItemsWithUsers
+            }
+            
+            for item in itemsToDelete {
                 if let id = item.feedItem.id {
                     try await firebaseManager.deleteFeedItem(id: id)
                 }

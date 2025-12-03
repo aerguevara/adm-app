@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import MapKit
 
 struct UserDetailView: View {
     @Environment(\.dismiss) private var dismiss
@@ -18,6 +19,23 @@ struct UserDetailView: View {
     
     var body: some View {
         Form {
+            Section("Territories") {
+                if viewModel.isLoadingTerritories {
+                    ProgressView("Loading territories...")
+                } else if viewModel.territories.isEmpty {
+                    ContentUnavailableView {
+                        Label("No Territories", systemImage: "map")
+                    } description: {
+                        Text("This user has no territories")
+                    }
+                } else {
+                    TerritoriesOverviewMapContainer(territories: viewModel.territories)
+                        .frame(height: 280)
+                        .listRowInsets(EdgeInsets())
+                        .listRowSeparator(.hidden)
+                }
+            }
+            
             Section("Basic Information") {
                 TextField("Display Name", text: $viewModel.displayName)
                 TextField("Email", text: $viewModel.email)
@@ -28,9 +46,35 @@ struct UserDetailView: View {
             Section("Stats") {
                 Stepper("Level: \(viewModel.level)", value: $viewModel.level, in: 1...100)
                 
-                Stepper("XP: \(viewModel.xp)", value: $viewModel.xp, in: 0...999999, step: 10)
+                HStack {
+                    Text("XP")
+                    Spacer()
+                    TextField("XP", value: $viewModel.xp, format: .number)
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
+                }
                 
                 Stepper("Previous Rank: \(viewModel.previousRank)", value: $viewModel.previousRank, in: 0...9999)
+            }
+            
+            Section("Activities") {
+                if viewModel.isLoadingActivities {
+                    ProgressView("Loading activities...")
+                } else if viewModel.activities.isEmpty {
+                    ContentUnavailableView {
+                        Label("No Activities", systemImage: "figure.walk")
+                    } description: {
+                        Text("This user has no recorded activities")
+                    }
+                } else {
+                    ForEach(viewModel.activities) { activity in
+                        NavigationLink {
+                            ActivityDetailView(activity: activity)
+                        } label: {
+                            ActivityRow(activity: activity)
+                        }
+                    }
+                }
             }
             
             Section("Timestamps") {
@@ -87,6 +131,83 @@ struct UserDetailView: View {
         } message: {
             Text(viewModel.errorMessage)
         }
+        .task {
+            await viewModel.loadTerritories()
+            await viewModel.loadActivities()
+        }
+    }
+}
+
+struct ActivityRow: View {
+    let activity: ActivitySession
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(activity.activityType.capitalized)
+                    .font(.headline)
+                Spacer()
+                Text(activity.startDate.shortDate)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            
+            HStack(spacing: 12) {
+                Label(durationString, systemImage: "clock")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                
+                Label(distanceString, systemImage: "figure.walk")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                
+                if activity.xpBreakdown.total > 0 {
+                    Label("+\(activity.xpBreakdown.total) XP", systemImage: "bolt.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+            }
+            
+            if activity.territoryStats.newCellsCount > 0 ||
+                activity.territoryStats.defendedCellsCount > 0 ||
+                activity.territoryStats.recapturedCellsCount > 0 {
+                HStack(spacing: 8) {
+                    if activity.territoryStats.newCellsCount > 0 {
+                        Label("\(activity.territoryStats.newCellsCount) new", systemImage: "sparkles")
+                            .font(.caption2)
+                            .foregroundStyle(.green)
+                    }
+                    if activity.territoryStats.defendedCellsCount > 0 {
+                        Label("\(activity.territoryStats.defendedCellsCount) defended", systemImage: "shield.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.blue)
+                    }
+                    if activity.territoryStats.recapturedCellsCount > 0 {
+                        Label("\(activity.territoryStats.recapturedCellsCount) recaptured", systemImage: "arrow.clockwise")
+                            .font(.caption2)
+                            .foregroundStyle(.purple)
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 6)
+    }
+    
+    private var distanceString: String {
+        let km = activity.distanceMeters / 1000
+        return String(format: "%.2f km", km)
+    }
+    
+    private var durationString: String {
+        let totalSeconds = Int(activity.durationSeconds)
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let seconds = totalSeconds % 60
+        if hours > 0 {
+            return String(format: "%dh %dm %ds", hours, minutes, seconds)
+        } else {
+            return String(format: "%dm %ds", minutes, seconds)
+        }
     }
 }
 
@@ -101,6 +222,10 @@ class UserDetailViewModel: ObservableObject {
     @Published var lastUpdated: Date?
     @Published var showError = false
     @Published var errorMessage = ""
+    @Published var territories: [RemoteTerritory] = []
+    @Published var isLoadingTerritories = false
+    @Published var activities: [ActivitySession] = []
+    @Published var isLoadingActivities = false
     
     private let user: User
     private let firebaseManager = FirebaseManager.shared
@@ -148,6 +273,218 @@ class UserDetailViewModel: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
             showError = true
+        }
+    }
+    
+    func loadTerritories() async {
+        guard let userId = user.id else { return }
+        
+        isLoadingTerritories = true
+        do {
+            territories = try await firebaseManager.fetchTerritories(for: userId)
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+        isLoadingTerritories = false
+    }
+    
+    func loadActivities() async {
+        guard let userId = user.id else { return }
+        isLoadingActivities = true
+        do {
+            activities = try await firebaseManager.fetchActivities(for: userId)
+            activities.sort { $0.startDate > $1.startDate }
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+        isLoadingActivities = false
+    }
+}
+
+struct TerritoriesOverviewMapView: UIViewRepresentable {
+    let territories: [RemoteTerritory]
+    @ObservedObject var controller: TerritoryMapController
+    let focusId: String?
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(controller: controller)
+    }
+    
+    func makeUIView(context: Context) -> MKMapView {
+        let mapView = MKMapView()
+        controller.mapView = mapView
+        mapView.delegate = context.coordinator
+        mapView.pointOfInterestFilter = .excludingAll
+        mapView.showsCompass = false
+        mapView.isRotateEnabled = false
+        mapView.isPitchEnabled = false
+        mapView.isScrollEnabled = true
+        mapView.isZoomEnabled = true
+        return mapView
+    }
+    
+    func updateUIView(_ mapView: MKMapView, context: Context) {
+        controller.mapView = mapView
+        mapView.delegate = context.coordinator
+        mapView.removeOverlays(mapView.overlays)
+        
+        var overlayIds: Set<String> = []
+        var rectById: [String: MKMapRect] = [:]
+        
+        let polygons = territories.compactMap { territory -> MKPolygon? in
+            guard !territory.boundary.isEmpty else { return nil }
+            let coords = territory.boundary.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
+            let polygon = MKPolygon(coordinates: coords, count: coords.count)
+            if let id = territory.id {
+                polygon.title = id
+                overlayIds.insert(id)
+                rectById[id] = polygon.boundingMapRect
+            }
+            return polygon
+        }
+        
+        mapView.addOverlays(polygons)
+        
+        // Add rects for territories without boundary so navigation still works
+        for territory in territories {
+            guard let id = territory.id else { continue }
+            if rectById[id] == nil {
+                let point = MKMapPoint(CLLocationCoordinate2D(latitude: territory.centerLatitude, longitude: territory.centerLongitude))
+                let size: Double = 1000
+                let rect = MKMapRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size)
+                rectById[id] = rect
+            }
+        }
+        
+        controller.rectById = rectById
+        
+        let targetRect = rectById.values.reduce(MKMapRect.null) { partialResult, rect in
+            partialResult.union(rect)
+        }
+        
+        controller.unionRect = targetRect.isNull ? nil : targetRect
+        
+        // Fit to all territories only when overlays change, to not fight manual navigation
+        if overlayIds != controller.lastOverlayIds {
+            controller.lastOverlayIds = overlayIds
+            controller.fitAll(animated: false)
+        }
+        
+        if let focusId, focusId != controller.lastFocusedId {
+            controller.focus(on: focusId, animated: true)
+        }
+    }
+    
+    class Coordinator: NSObject, MKMapViewDelegate {
+        let controller: TerritoryMapController
+        
+        init(controller: TerritoryMapController) {
+            self.controller = controller
+        }
+        
+        func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+            guard let polygon = overlay as? MKPolygon else {
+                return MKOverlayRenderer(overlay: overlay)
+            }
+            let renderer = MKPolygonRenderer(polygon: polygon)
+            renderer.fillColor = UIColor.systemGreen.withAlphaComponent(0.25)
+            renderer.strokeColor = UIColor.systemGreen
+            renderer.lineWidth = 2
+            return renderer
+        }
+    }
+}
+
+final class TerritoryMapController: ObservableObject {
+    fileprivate weak var mapView: MKMapView?
+    fileprivate var rectById: [String: MKMapRect] = [:]
+    fileprivate var lastOverlayIds: Set<String> = []
+    fileprivate var unionRect: MKMapRect?
+    fileprivate var lastFocusedId: String?
+    
+    func zoomIn() {
+        zoom(factor: 0.65)
+    }
+    
+    func zoomOut() {
+        zoom(factor: 1.35)
+    }
+    
+    private func zoom(factor: Double) {
+        guard let mapView else { return }
+        var rect = mapView.visibleMapRect
+        let newWidth = rect.size.width * factor
+        let newHeight = rect.size.height * factor
+        rect.origin.x += (rect.size.width - newWidth) / 2
+        rect.origin.y += (rect.size.height - newHeight) / 2
+        rect.size.width = newWidth
+        rect.size.height = newHeight
+        mapView.setVisibleMapRect(rect, animated: true)
+    }
+    
+    func focus(on territoryId: String, animated: Bool = true) {
+        guard let mapView, let rect = rectById[territoryId], !rect.isNull else { return }
+        lastFocusedId = territoryId
+        mapView.setVisibleMapRect(
+            rect,
+            edgePadding: UIEdgeInsets(top: 32, left: 32, bottom: 32, right: 32),
+            animated: animated
+        )
+    }
+    
+    func fitAll(animated: Bool = true) {
+        guard let mapView, let rect = unionRect, !rect.isNull else { return }
+        mapView.setVisibleMapRect(
+            rect,
+            edgePadding: UIEdgeInsets(top: 32, left: 32, bottom: 32, right: 32),
+            animated: animated
+        )
+    }
+}
+
+struct TerritoriesOverviewMapContainer: View {
+    let territories: [RemoteTerritory]
+    @StateObject private var controller = TerritoryMapController()
+    
+    var body: some View {
+        ZStack {
+            TerritoriesOverviewMapView(territories: territories, controller: controller, focusId: nil)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            
+            VStack(spacing: 12) {
+                Button {
+                    controller.zoomIn()
+                } label: {
+                    Image(systemName: "plus.magnifyingglass")
+                        .font(.title2)
+                        .frame(width: 46, height: 46)
+                        .background(.thinMaterial)
+                        .clipShape(Circle())
+                }
+                
+                Button {
+                    controller.zoomOut()
+                } label: {
+                    Image(systemName: "minus.magnifyingglass")
+                        .font(.title2)
+                        .frame(width: 46, height: 46)
+                        .background(.thinMaterial)
+                        .clipShape(Circle())
+                }
+            }
+            .padding()
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+        }
+        .onChange(of: territories) { _, newValue in
+            guard !newValue.isEmpty else {
+                return
+            }
+            controller.fitAll(animated: false)
+        }
+        .onAppear {
+            controller.fitAll(animated: false)
         }
     }
 }
