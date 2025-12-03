@@ -29,27 +29,51 @@ struct UsersListView: View {
     
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(filteredUsers) { user in
-                    HStack {
-                        NavigationLink(destination: UserDetailView(user: user)) {
-                            UserRow(user: user)
-                        }
-                        Spacer()
-                        Button(role: .destructive) {
-                            userToReset = user
-                            showingResetAlert = true
-                        } label: {
-                            Label("Reset", systemImage: "arrow.counterclockwise.circle")
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 16)], spacing: 16) {
+                    ForEach(filteredUsers) { user in
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Text(user.displayName.isEmpty ? "No Name" : user.displayName)
+                                    .font(.headline)
+                                Spacer()
+                                Button(role: .destructive) {
+                                    userToReset = user
+                                    showingResetAlert = true
+                                } label: {
+                                    Label("Reset", systemImage: "arrow.counterclockwise.circle")
+                                }
                                 .labelStyle(.iconOnly)
+                                .buttonStyle(.borderedProminent)
+                                .tint(.orange)
+                            }
+                            
+                            NavigationLink(destination: UserDetailView(user: user)) {
+                                UserRow(user: user)
+                            }
                         }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.orange)
-                        .controlSize(.regular)
-                        .padding(.leading, 8)
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(Color(.secondarySystemBackground))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                                )
+                                .shadow(color: Color.black.opacity(0.08), radius: 4, y: 2)
+                        )
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                Task {
+                                    await viewModel.deleteUser(user)
+                                }
+                            } label: {
+                                Label("Delete User", systemImage: "trash")
+                            }
+                        }
                     }
                 }
-                .onDelete(perform: deleteUsers)
+                .padding()
             }
             .overlay {
                 if viewModel.isLoading {
@@ -110,7 +134,7 @@ struct UsersListView: View {
                     }
                 }
             } message: { selected in
-                Text("This will reset XP to 0 and delete feed and territories for \(selected.displayName). The user account will remain.")
+                Text("This will reset XP to 0, level to 1, and delete feed and territories for \(selected.displayName). The user account will remain.")
             }
             .alert("Delete All Users", isPresented: $showingDeleteAllAlert) {
                 Button("Cancel", role: .cancel) {}
@@ -242,6 +266,7 @@ class UsersViewModel: ObservableObject {
             // Reset user XP
             var updatedUser = user
             updatedUser.xp = 0
+            updatedUser.level = 1
             try await firebaseManager.updateUser(updatedUser)
             
             // Delete feed items for user

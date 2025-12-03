@@ -61,13 +61,34 @@ struct FeedListView: View {
     
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(filteredFeedItems) { item in
-                    NavigationLink(destination: FeedDetailView(feedItem: item.feedItem)) {
-                        FeedRow(item: item)
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 16)], spacing: 16) {
+                    ForEach(filteredFeedItems) { item in
+                        VStack(alignment: .leading, spacing: 10) {
+                            NavigationLink(destination: FeedDetailView(feedItem: item.feedItem)) {
+                                FeedRow(item: item)
+                            }
+                        }
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(Color(.secondarySystemBackground))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                                )
+                                .shadow(color: Color.black.opacity(0.08), radius: 4, y: 2)
+                        )
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                Task { await viewModel.deleteFeedItem(item.feedItem) }
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
                     }
                 }
-                .onDelete(perform: deleteFeedItems)
+                .padding()
             }
             .overlay {
                 if viewModel.isLoading {

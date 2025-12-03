@@ -49,13 +49,34 @@ struct TerritoriesListView: View {
     
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(filteredTerritories) { territoryWithUser in
-                    NavigationLink(destination: TerritoryDetailView(territory: territoryWithUser.territory)) {
-                        TerritoryRow(territory: territoryWithUser)
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 16)], spacing: 16) {
+                    ForEach(filteredTerritories) { territoryWithUser in
+                        VStack(alignment: .leading, spacing: 10) {
+                            NavigationLink(destination: TerritoryDetailView(territory: territoryWithUser.territory)) {
+                                TerritoryRow(territory: territoryWithUser)
+                            }
+                        }
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(Color(.secondarySystemBackground))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                                )
+                                .shadow(color: Color.black.opacity(0.08), radius: 4, y: 2)
+                        )
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                Task { await viewModel.deleteTerritory(territoryWithUser) }
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
                     }
                 }
-                .onDelete(perform: deleteTerritories)
+                .padding()
             }
             .overlay {
                 if viewModel.isLoading {
