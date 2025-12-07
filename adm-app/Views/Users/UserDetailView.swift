@@ -12,6 +12,8 @@ struct UserDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel: UserDetailViewModel
     @State private var showingDeleteAlert = false
+    @State private var showingFollowSheet = false
+    @State private var followSearchText = ""
     
     init(user: User) {
         _viewModel = StateObject(wrappedValue: UserDetailViewModel(user: user))
@@ -19,6 +21,23 @@ struct UserDetailView: View {
     
     var body: some View {
         Form {
+            Section("Perfil") {
+                HStack(spacing: 16) {
+                    AvatarView(urlString: viewModel.avatarURL, size: 64)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(viewModel.displayName.isEmpty ? "Sin nombre" : viewModel.displayName)
+                            .font(.headline)
+                        Text(viewModel.email.isEmpty ? "Sin email" : viewModel.email)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                TextField("Avatar URL", text: $viewModel.avatarURL)
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.URL)
+                    .autocorrectionDisabled()
+            }
+            
             Section("Territories") {
                 if viewModel.isLoadingTerritories {
                     ProgressView("Loading territories...")
@@ -55,6 +74,54 @@ struct UserDetailView: View {
                 }
                 
                 Stepper("Previous Rank: \(viewModel.previousRank)", value: $viewModel.previousRank, in: 0...9999)
+            }
+            
+            Section("Followers (\(viewModel.followers.count))") {
+                if viewModel.isLoadingFollowers {
+                    ProgressView("Loading followers...")
+                } else if viewModel.followers.isEmpty {
+                    ContentUnavailableView {
+                        Label("No Followers", systemImage: "person.2")
+                    } description: {
+                        Text("Este usuario no tiene seguidores")
+                    }
+                } else {
+                    ForEach(viewModel.followers) { follower in
+                        FollowRow(follow: follower) {
+                            Task {
+                                await viewModel.removeFollower(followerId: follower.id)
+                            }
+                        }
+                    }
+                }
+            }
+            
+            Section("Following (\(viewModel.following.count))") {
+                if viewModel.isLoadingFollowing {
+                    ProgressView("Loading following...")
+                } else {
+                    Button {
+                        showingFollowSheet = true
+                    } label: {
+                        Label("Seguir usuario", systemImage: "person.badge.plus")
+                    }
+                    
+                    if viewModel.following.isEmpty {
+                        ContentUnavailableView {
+                            Label("No Following", systemImage: "person.2.fill")
+                        } description: {
+                            Text("Este usuario no sigue a nadie")
+                        }
+                    } else {
+                        ForEach(viewModel.following) { relation in
+                            FollowRow(follow: relation) {
+                                Task {
+                                    await viewModel.unfollow(followedUserId: relation.id)
+                                }
+                            }
+                        }
+                    }
+                }
             }
             
             Section("Timestamps") {
@@ -113,7 +180,141 @@ struct UserDetailView: View {
         }
         .task {
             await viewModel.loadTerritories()
+            await viewModel.loadFollowers()
+            await viewModel.loadFollowing()
+            await viewModel.loadAllUsers()
         }
+        .sheet(isPresented: $showingFollowSheet) {
+            FollowPickerView(
+                searchText: $followSearchText,
+                candidates: viewModel.availableFollowTargets,
+                onSelect: { user in
+                    Task {
+                        await viewModel.follow(userToFollow: user)
+                        await viewModel.loadFollowing()
+                    }
+                }
+            )
+        }
+    }
+}
+
+struct FollowRow: View {
+    let follow: FollowRelationship
+    var action: () -> Void
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            AvatarView(urlString: follow.avatarURL, size: 36)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(follow.displayName.isEmpty ? "Sin nombre" : follow.displayName)
+                    .font(.subheadline)
+                if let date = follow.followedAt {
+                    Text("Desde \(date.shortDate)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            
+            Spacer()
+            
+            Button(role: .destructive) {
+                action()
+            } label: {
+                Image(systemName: "xmark.circle")
+            }
+            .buttonStyle(.borderless)
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+struct FollowPickerView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var searchText: String
+    let candidates: [User]
+    let onSelect: (User) -> Void
+    
+    var filteredCandidates: [User] {
+        guard !searchText.isEmpty else { return candidates }
+        return candidates.filter { user in
+            user.displayName.localizedCaseInsensitiveContains(searchText) ||
+            (user.email?.localizedCaseInsensitiveContains(searchText) ?? false) ||
+            (user.id ?? "").localizedCaseInsensitiveContains(searchText)
+        }
+    }
+    
+    var body: some View {
+        NavigationStack {
+            List(filteredCandidates) { user in
+                Button {
+                    onSelect(user)
+                    dismiss()
+                } label: {
+                    HStack(spacing: 12) {
+                        AvatarView(urlString: user.avatarURL, size: 32)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(user.displayName)
+                                .font(.body)
+                            if let email = user.email {
+                                Text(email)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Seguir usuario")
+            .searchable(text: $searchText, prompt: "Buscar por nombre o email")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cerrar") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+struct AvatarView: View {
+    let urlString: String?
+    let size: CGFloat
+    
+    var body: some View {
+        Group {
+            if let url {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    case .failure, .empty:
+                        placeholder
+                    @unknown default:
+                        placeholder
+                    }
+                }
+            } else {
+                placeholder
+            }
+        }
+        .frame(width: size, height: size)
+        .background(Color.gray.opacity(0.1))
+        .clipShape(Circle())
+    }
+    
+    private var url: URL? {
+        guard let urlString, !urlString.isEmpty else { return nil }
+        return URL(string: urlString)
+    }
+    
+    private var placeholder: some View {
+        Circle()
+            .fill(Color.gray.opacity(0.2))
+            .overlay(
+                Image(systemName: "person.fill")
+                    .foregroundStyle(.white)
+            )
     }
 }
 
@@ -121,6 +322,7 @@ struct UserDetailView: View {
 class UserDetailViewModel: ObservableObject {
     @Published var displayName: String
     @Published var email: String
+    @Published var avatarURL: String
     @Published var level: Int
     @Published var xp: Int
     @Published var previousRank: Int
@@ -130,6 +332,12 @@ class UserDetailViewModel: ObservableObject {
     @Published var errorMessage = ""
     @Published var territories: [RemoteTerritory] = []
     @Published var isLoadingTerritories = false
+    @Published var followers: [FollowRelationship] = []
+    @Published var following: [FollowRelationship] = []
+    @Published var isLoadingFollowers = false
+    @Published var isLoadingFollowing = false
+    @Published var allUsers: [User] = []
+    @Published var isLoadingAllUsers = false
     
     private let user: User
     private let firebaseManager = FirebaseManager.shared
@@ -142,6 +350,7 @@ class UserDetailViewModel: ObservableObject {
         self.user = user
         self.displayName = user.displayName
         self.email = user.email ?? ""
+        self.avatarURL = user.avatarURL ?? ""
         self.level = user.level
         self.xp = user.xp
         self.previousRank = user.previousRank ?? 0
@@ -154,6 +363,7 @@ class UserDetailViewModel: ObservableObject {
             id: user.id,
             displayName: displayName,
             email: email.isEmpty ? nil : email,
+            avatarURL: avatarURL.isEmpty ? nil : avatarURL,
             joinedAt: joinedAt,
             lastUpdated: Date(), // Update timestamp
             level: level,
@@ -193,6 +403,96 @@ class UserDetailViewModel: ObservableObject {
         isLoadingTerritories = false
     }
     
+    func loadFollowers() async {
+        guard let userId = user.id else { return }
+        isLoadingFollowers = true
+        do {
+            followers = try await firebaseManager.fetchFollowers(for: userId)
+            followers.sort { ($0.followedAt ?? .distantPast) > ($1.followedAt ?? .distantPast) }
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+        isLoadingFollowers = false
+    }
+    
+    func loadFollowing() async {
+        guard let userId = user.id else { return }
+        isLoadingFollowing = true
+        do {
+            following = try await firebaseManager.fetchFollowing(for: userId)
+            following.sort { ($0.followedAt ?? .distantPast) > ($1.followedAt ?? .distantPast) }
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+        isLoadingFollowing = false
+    }
+    
+    func loadAllUsers() async {
+        isLoadingAllUsers = true
+        do {
+            allUsers = try await firebaseManager.fetchUsers()
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+        isLoadingAllUsers = false
+    }
+    
+    var availableFollowTargets: [User] {
+        guard let currentId = user.id else { return [] }
+        let followingIds = Set(following.compactMap { $0.id })
+        return allUsers.filter { candidate in
+            guard let id = candidate.id else { return false }
+            if id == currentId { return false }
+            return !followingIds.contains(id)
+        }
+    }
+    
+    func follow(userToFollow: User) async {
+        guard user.id != nil else { return }
+        do {
+            let currentUserSnapshot = User(
+                id: user.id,
+                displayName: displayName,
+                email: email.isEmpty ? nil : email,
+                avatarURL: avatarURL.isEmpty ? nil : avatarURL,
+                joinedAt: joinedAt,
+                lastUpdated: lastUpdated,
+                level: level,
+                xp: xp,
+                previousRank: previousRank == 0 ? nil : previousRank
+            )
+            try await firebaseManager.follow(user: currentUserSnapshot, targetUser: userToFollow)
+            await loadFollowing()
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+    
+    func unfollow(followedUserId: String?) async {
+        guard let currentId = user.id, let followedUserId else { return }
+        do {
+            try await firebaseManager.unfollow(userId: currentId, targetUserId: followedUserId)
+            await loadFollowing()
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+    
+    func removeFollower(followerId: String?) async {
+        guard let currentId = user.id, let followerId else { return }
+        do {
+            try await firebaseManager.removeFollower(userId: currentId, followerUserId: followerId)
+            await loadFollowers()
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
 }
 
 struct TerritoriesOverviewMapView: UIViewRepresentable {

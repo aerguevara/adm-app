@@ -189,6 +189,12 @@ struct TerritoryRow: View {
                 }
             }
             
+            if let id = territory.territory.id {
+                Text("ID: \(id)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Center: \(String(format: "%.4f", territory.territory.centerLatitude)), \(String(format: "%.4f", territory.territory.centerLongitude))")

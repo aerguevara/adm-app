@@ -12,6 +12,7 @@ struct User: Identifiable, Codable, Hashable {
     @DocumentID var id: String?
     var displayName: String
     var email: String?
+    var avatarURL: String?
     var joinedAt: Date
     var lastUpdated: Date?
     var level: Int
@@ -22,6 +23,7 @@ struct User: Identifiable, Codable, Hashable {
         case id
         case displayName
         case email
+        case avatarURL
         case joinedAt
         case lastUpdated
         case level
@@ -30,10 +32,11 @@ struct User: Identifiable, Codable, Hashable {
     }
     
     // Initializer for creating new users
-    init(id: String? = nil, displayName: String, email: String? = nil, joinedAt: Date = Date(), lastUpdated: Date? = Date(), level: Int = 1, xp: Int = 0, previousRank: Int? = nil) {
+    init(id: String? = nil, displayName: String, email: String? = nil, avatarURL: String? = nil, joinedAt: Date = Date(), lastUpdated: Date? = Date(), level: Int = 1, xp: Int = 0, previousRank: Int? = nil) {
         self.id = id
         self.displayName = displayName
         self.email = email
+        self.avatarURL = avatarURL
         self.joinedAt = joinedAt
         self.lastUpdated = lastUpdated
         self.level = level

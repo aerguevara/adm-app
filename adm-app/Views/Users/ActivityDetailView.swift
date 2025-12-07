@@ -97,7 +97,12 @@ struct ActivityDetailView: View {
                 xpRow(label: "Weekly Record", value: activity.xpBreakdown.xpWeeklyRecord)
                 xpRow(label: "Badges", value: activity.xpBreakdown.xpBadges)
                 Divider()
-                xpRow(label: "Total", value: activity.xpBreakdown.total, bold: true)
+                xpRow(label: "Total", value: computedXP, bold: true)
+                if activity.xpBreakdown.total != 0 && activity.xpBreakdown.total != computedXP {
+                    Text("Total reportado: +\(activity.xpBreakdown.total) XP")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
             .padding()
             .background(.thinMaterial)
@@ -113,6 +118,14 @@ struct ActivityDetailView: View {
                 .fontWeight(bold ? .semibold : .regular)
         }
         .font(.subheadline)
+    }
+    
+    private var computedXP: Int {
+        activity.xpBreakdown.xpBase +
+        activity.xpBreakdown.xpTerritory +
+        activity.xpBreakdown.xpStreak +
+        activity.xpBreakdown.xpWeeklyRecord +
+        activity.xpBreakdown.xpBadges
     }
     
     private var territorySection: some View {

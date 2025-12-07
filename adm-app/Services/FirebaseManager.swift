@@ -210,4 +210,121 @@ class FirebaseManager: ObservableObject {
     func deleteTerritory(id: String) async throws {
         try await deleteDocument(from: FirebaseCollection.territories, id: id)
     }
+    
+    // MARK: - Follow Operations
+    
+    func fetchFollowers(for userId: String) async throws -> [FollowRelationship] {
+        let snapshot = try await db.collection(FirebaseCollection.users)
+            .document(userId)
+            .collection("followers")
+            .getDocuments(source: .server)
+        
+        return snapshot.documents.compactMap { document in
+            if var follower = try? document.data(as: FollowRelationship.self) {
+                if follower.id == nil {
+                    follower.id = document.documentID
+                }
+                return follower
+            } else {
+                let data = document.data()
+                let displayName = data["displayName"] as? String ?? ""
+                let avatarURL = data["avatarURL"] as? String
+                let followedAt = (data["followedAt"] as? Timestamp)?.dateValue()
+                return FollowRelationship(id: document.documentID, displayName: displayName, avatarURL: avatarURL, followedAt: followedAt)
+            }
+        }
+    }
+    
+    func fetchFollowing(for userId: String) async throws -> [FollowRelationship] {
+        let snapshot = try await db.collection(FirebaseCollection.users)
+            .document(userId)
+            .collection("following")
+            .getDocuments(source: .server)
+        
+        return snapshot.documents.compactMap { document in
+            if var following = try? document.data(as: FollowRelationship.self) {
+                if following.id == nil {
+                    following.id = document.documentID
+                }
+                return following
+            } else {
+                let data = document.data()
+                let displayName = data["displayName"] as? String ?? ""
+                let avatarURL = data["avatarURL"] as? String
+                let followedAt = (data["followedAt"] as? Timestamp)?.dateValue()
+                return FollowRelationship(id: document.documentID, displayName: displayName, avatarURL: avatarURL, followedAt: followedAt)
+            }
+        }
+    }
+    
+    func follow(user: User, targetUser: User) async throws {
+        guard let userId = user.id, let targetId = targetUser.id else {
+            throw NSError(domain: "FollowError", code: 1, userInfo: [NSLocalizedDescriptionKey: "User IDs are missing"])
+        }
+        
+        let batch = db.batch()
+        let followerData: [String: Any] = [
+            "displayName": user.displayName,
+            "avatarURL": user.avatarURL ?? "",
+            "followedAt": FieldValue.serverTimestamp()
+        ]
+        let followingData: [String: Any] = [
+            "displayName": targetUser.displayName,
+            "avatarURL": targetUser.avatarURL ?? "",
+            "followedAt": FieldValue.serverTimestamp()
+        ]
+        
+        let userFollowingRef = db.collection(FirebaseCollection.users)
+            .document(userId)
+            .collection("following")
+            .document(targetId)
+        
+        let targetFollowersRef = db.collection(FirebaseCollection.users)
+            .document(targetId)
+            .collection("followers")
+            .document(userId)
+        
+        batch.setData(followingData, forDocument: userFollowingRef, merge: true)
+        batch.setData(followerData, forDocument: targetFollowersRef, merge: true)
+        
+        try await batch.commit()
+    }
+    
+    func unfollow(userId: String, targetUserId: String) async throws {
+        let batch = db.batch()
+        
+        let userFollowingRef = db.collection(FirebaseCollection.users)
+            .document(userId)
+            .collection("following")
+            .document(targetUserId)
+        
+        let targetFollowersRef = db.collection(FirebaseCollection.users)
+            .document(targetUserId)
+            .collection("followers")
+            .document(userId)
+        
+        batch.deleteDocument(userFollowingRef)
+        batch.deleteDocument(targetFollowersRef)
+        
+        try await batch.commit()
+    }
+    
+    func removeFollower(userId: String, followerUserId: String) async throws {
+        let batch = db.batch()
+        
+        let userFollowersRef = db.collection(FirebaseCollection.users)
+            .document(userId)
+            .collection("followers")
+            .document(followerUserId)
+        
+        let followerFollowingRef = db.collection(FirebaseCollection.users)
+            .document(followerUserId)
+            .collection("following")
+            .document(userId)
+        
+        batch.deleteDocument(userFollowersRef)
+        batch.deleteDocument(followerFollowingRef)
+        
+        try await batch.commit()
+    }
 }

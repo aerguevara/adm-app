@@ -10,15 +10,15 @@ import SwiftUI
 struct ActivitiesListView: View {
     @StateObject private var viewModel = ActivitiesViewModel()
     @State private var searchText = ""
-    @State private var selectedActivityType = "All"
+    @State private var selectedUserId = ActivitiesListView.allUsersFilterId
+    
+    private static let allUsersFilterId = "__all_users__"
     
     private var filteredActivities: [ActivityWithUser] {
         var activities = viewModel.activities
         
-        if selectedActivityType != "All" {
-            activities = activities.filter { item in
-                item.activity.activityType.localizedCaseInsensitiveCompare(selectedActivityType) == .orderedSame
-            }
+        if selectedUserId != ActivitiesListView.allUsersFilterId {
+            activities = activities.filter { $0.activity.userId == selectedUserId }
         }
         
         if !searchText.isEmpty {
@@ -32,25 +32,49 @@ struct ActivitiesListView: View {
         return activities
     }
     
-    private var activityTypes: [String] {
-        let types = Set(viewModel.activities.map { $0.activity.activityType })
-        return ["All"] + types.sorted()
+    private var totalXPEarned: Int {
+        filteredActivities.reduce(0) { $0 + $1.activity.xpBreakdown.total }
+    }
+    
+    private var userFilterOptions: [(id: String, name: String)] {
+        var map: [String: String] = [:]
+        for item in viewModel.activities {
+            let name = item.displayName.isEmpty ? "Sin nombre" : item.displayName
+            map[item.activity.userId] = name
+        }
+        let sorted = map.map { ($0.key, $0.value) }
+            .sorted { $0.1.localizedCaseInsensitiveCompare($1.1) == .orderedAscending }
+        return [(ActivitiesListView.allUsersFilterId, "Todos los usuarios")] + sorted
     }
     
     var body: some View {
         NavigationStack {
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), spacing: 16)], spacing: 16) {
-                    ForEach(filteredActivities) { item in
-                        NavigationLink {
-                            ActivityDetailView(activity: item.activity)
-                        } label: {
-                            ActivityCardView(item: item)
-                        }
-                        .buttonStyle(.plain)
-                    }
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Label("XP total en vista", systemImage: "bolt.fill")
+                        .foregroundStyle(.orange)
+                        .font(.subheadline.weight(.semibold))
+                    Spacer()
+                    Text("+\(totalXPEarned) XP")
+                        .font(.headline)
+                        .foregroundStyle(.orange)
                 }
-                .padding()
+                .padding(.horizontal)
+                .padding(.top, 6)
+                
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), spacing: 16)], spacing: 16) {
+                        ForEach(filteredActivities) { item in
+                            NavigationLink {
+                                ActivityDetailView(activity: item.activity)
+                            } label: {
+                                ActivityCardView(item: item)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding()
+                }
             }
             .overlay {
                 if viewModel.isLoading {
@@ -71,9 +95,9 @@ struct ActivitiesListView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
-                        Picker("Activity Type", selection: $selectedActivityType) {
-                            ForEach(activityTypes, id: \.self) { type in
-                                Text(type == "All" ? "All Types" : type.capitalized).tag(type)
+                        Picker("Filtrar por usuario", selection: $selectedUserId) {
+                            ForEach(userFilterOptions, id: \.id) { option in
+                                Text(option.name).tag(option.id)
                             }
                         }
                     } label: {
@@ -257,7 +281,7 @@ class ActivitiesViewModel: ObservableObject {
                 ActivityWithUser(activity: activity, user: userDictionary[activity.userId])
             }
             
-            combined.sort { $0.activity.startDate > $1.activity.startDate }
+            combined.sort { $0.activity.endDate > $1.activity.endDate }
             self.activities = combined
         } catch {
             errorMessage = error.localizedDescription

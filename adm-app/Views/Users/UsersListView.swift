@@ -178,36 +178,40 @@ struct UserRow: View {
     let user: User
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(user.displayName.isEmpty ? "No Name" : user.displayName)
-                    .font(.headline)
-                Spacer()
-                HStack(spacing: 4) {
-                    Image(systemName: "star.fill")
-                        .foregroundStyle(.yellow)
-                        .font(.caption2)
-                    Text("Lv \(user.level)")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
+        HStack(alignment: .top, spacing: 12) {
+            AvatarView(urlString: user.avatarURL, size: 44)
+            
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(user.displayName.isEmpty ? "No Name" : user.displayName)
+                        .font(.headline)
+                    Spacer()
+                    HStack(spacing: 4) {
+                        Image(systemName: "star.fill")
+                            .foregroundStyle(.yellow)
+                            .font(.caption2)
+                        Text("Lv \(user.level)")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-            }
-            
-            Text(user.email ?? "No email")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            
-            HStack {
-                Label("\(user.xp) XP", systemImage: "bolt.fill")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
                 
-                Spacer()
+                Text(user.email ?? "No email")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                 
-                Text("Joined: \(user.joinedAt.shortDate)")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                HStack {
+                    Label("\(user.xp) XP", systemImage: "bolt.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    
+                    Spacer()
+                    
+                    Text("Joined: \(user.joinedAt.shortDate)")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
             }
         }
         .padding(.vertical, 4)
