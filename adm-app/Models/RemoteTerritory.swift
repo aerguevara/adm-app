@@ -26,6 +26,7 @@ struct RemoteTerritory: Identifiable, Codable, Hashable {
     var centerLongitude: Double
     var expiresAt: Date
     var timestamp: Date
+    var activityEndAt: Date?
     var userId: String
     
     enum CodingKeys: String, CodingKey {
@@ -35,6 +36,7 @@ struct RemoteTerritory: Identifiable, Codable, Hashable {
         case centerLongitude
         case expiresAt
         case timestamp
+        case activityEndAt
         case userId
     }
     
@@ -43,13 +45,14 @@ struct RemoteTerritory: Identifiable, Codable, Hashable {
     }
     
     // Initializer for creating new territories
-    init(id: String? = nil, boundary: [Coordinate] = [], centerLatitude: Double, centerLongitude: Double, expiresAt: Date, timestamp: Date = Date(), userId: String) {
+    init(id: String? = nil, boundary: [Coordinate] = [], centerLatitude: Double, centerLongitude: Double, expiresAt: Date, timestamp: Date = Date(), activityEndAt: Date? = nil, userId: String) {
         self.id = id
         self.boundary = boundary
         self.centerLatitude = centerLatitude
         self.centerLongitude = centerLongitude
         self.expiresAt = expiresAt
         self.timestamp = timestamp
+        self.activityEndAt = activityEndAt
         self.userId = userId
     }
 }

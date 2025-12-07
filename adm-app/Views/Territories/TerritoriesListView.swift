@@ -216,6 +216,11 @@ struct TerritoryRow: View {
                     Text("Expires: \(territory.territory.expiresAt.shortDate)")
                         .font(.caption2)
                         .foregroundStyle(territory.territory.isExpired ? .red : .secondary)
+                    if let activityEndAt = territory.territory.activityEndAt {
+                        Text("Activity Ends: \(activityEndAt.shortDate)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
         }

@@ -95,6 +95,13 @@ struct TerritoryDetailView: View {
                 DatePicker("Created", selection: $viewModel.timestamp, displayedComponents: [.date, .hourAndMinute])
                 
                 DatePicker("Expires", selection: $viewModel.expiresAt, displayedComponents: [.date, .hourAndMinute])
+                
+                if let activityEndAt = viewModel.activityEndAt {
+                    LabeledContent("Activity Ends") {
+                        Text(activityEndAt.mediumDate)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
             
             Section {
@@ -211,6 +218,7 @@ class TerritoryDetailViewModel: ObservableObject {
     @Published var userId: String
     @Published var timestamp: Date
     @Published var expiresAt: Date
+    @Published var activityEndAt: Date?
     @Published var showError = false
     @Published var errorMessage = ""
     
@@ -228,6 +236,7 @@ class TerritoryDetailViewModel: ObservableObject {
         self.userId = territory.userId
         self.timestamp = territory.timestamp
         self.expiresAt = territory.expiresAt
+        self.activityEndAt = territory.activityEndAt
     }
     
     func saveTerritory() async {
@@ -238,6 +247,7 @@ class TerritoryDetailViewModel: ObservableObject {
             centerLongitude: centerLongitude,
             expiresAt: expiresAt,
             timestamp: timestamp,
+            activityEndAt: activityEndAt,
             userId: userId
         )
         

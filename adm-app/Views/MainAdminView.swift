@@ -18,17 +18,23 @@ struct MainAdminView: View {
                 }
                 .tag(0)
             
+            ActivitiesListView()
+                .tabItem {
+                    Label("Activities", systemImage: "figure.walk.motion")
+                }
+                .tag(1)
+            
             FeedListView()
                 .tabItem {
                     Label("Feed", systemImage: "list.bullet.clipboard.fill")
                 }
-                .tag(1)
+                .tag(2)
             
             TerritoriesListView()
                 .tabItem {
                     Label("Territories", systemImage: "map.fill")
                 }
-                .tag(2)
+                .tag(3)
         }
     }
 }

@@ -140,6 +140,22 @@ class FirebaseManager: ObservableObject {
         try await deleteDocument(from: FirebaseCollection.feed, id: id)
     }
     
+    // MARK: - Activities
+    
+    func deleteActivity(id: String) async throws {
+        try await deleteDocument(from: FirebaseCollection.activities, id: id)
+    }
+    
+    func deleteActivities(for userId: String) async throws {
+        let snapshot = try await db.collection(FirebaseCollection.activities)
+            .whereField("userId", isEqualTo: userId)
+            .getDocuments(source: .server)
+        
+        for document in snapshot.documents {
+            try await document.reference.delete()
+        }
+    }
+    
     // MARK: - Territory Specific Operations
     
     func fetchTerritories() async throws -> [RemoteTerritory] {
@@ -156,20 +172,26 @@ class FirebaseManager: ObservableObject {
         }
     }
     
-    func fetchActivities(for userId: String) async throws -> [ActivitySession] {
-        let snapshot = try await db.collection(FirebaseCollection.users)
-            .document(userId)
-            .collection("activities")
-            .getDocuments(source: .server)
+    func fetchActivities(filterUserId: String? = nil) async throws -> [ActivitySession] {
+        var query: Query = db.collection(FirebaseCollection.activities)
+        if let userId = filterUserId {
+            query = query.whereField("userId", isEqualTo: userId)
+        }
+        
+        let snapshot = try await query.getDocuments(source: .server)
         
         return snapshot.documents.compactMap { document in
+            let rawData = document.data()
+            
             // Prefer typed decoding; if it fails return a tolerant manual parse
-            if let session = try? document.data(as: ActivitySession.self) {
-                var sessionWithId = session
-                if sessionWithId.id == nil {
-                    sessionWithId.id = document.documentID
+            if var session = try? document.data(as: ActivitySession.self) {
+                if session.id == nil {
+                    session.id = document.documentID
                 }
-                return sessionWithId
+                if session.userId.isEmpty {
+                    session.userId = rawData["userId"] as? String ?? ""
+                }
+                return session
             } else {
                 return ActivitySession.from(document: document)
             }

@@ -76,6 +76,7 @@ struct ActivityMission: Codable, Hashable, Identifiable {
 
 struct ActivitySession: Identifiable, Codable, Hashable {
     var id: String?
+    var userId: String
     var startDate: Date
     var endDate: Date
     var activityType: String
@@ -88,7 +89,9 @@ struct ActivitySession: Identifiable, Codable, Hashable {
     
     enum CodingKeys: String, CodingKey {
         case id
+        case userId
         case startDate
+        case activityEndAt
         case endDate
         case activityType
         case distanceMeters
@@ -101,6 +104,7 @@ struct ActivitySession: Identifiable, Codable, Hashable {
     
     init(
         id: String? = nil,
+        userId: String = "",
         startDate: Date = Date(),
         endDate: Date = Date(),
         activityType: String = "otherOutdoor",
@@ -112,6 +116,7 @@ struct ActivitySession: Identifiable, Codable, Hashable {
         missions: [ActivityMission] = []
     ) {
         self.id = id
+        self.userId = userId
         self.startDate = startDate
         self.endDate = endDate
         self.activityType = activityType
@@ -126,8 +131,11 @@ struct ActivitySession: Identifiable, Codable, Hashable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.id = try container.decodeIfPresent(String.self, forKey: .id)
+        self.userId = try container.decodeIfPresent(String.self, forKey: .userId) ?? ""
         self.startDate = try container.decodeIfPresent(Date.self, forKey: .startDate) ?? Date()
-        self.endDate = try container.decodeIfPresent(Date.self, forKey: .endDate) ?? Date()
+        let decodedEndDate = try container.decodeIfPresent(Date.self, forKey: .endDate)
+        let decodedActivityEndAt = try container.decodeIfPresent(Date.self, forKey: .activityEndAt)
+        self.endDate = decodedEndDate ?? decodedActivityEndAt ?? Date()
         self.activityType = try container.decodeIfPresent(String.self, forKey: .activityType) ?? "otherOutdoor"
         self.distanceMeters = try container.decodeIfPresent(Double.self, forKey: .distanceMeters) ?? 0
         self.durationSeconds = try container.decodeIfPresent(Double.self, forKey: .durationSeconds) ?? 0
@@ -140,8 +148,10 @@ struct ActivitySession: Identifiable, Codable, Hashable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encodeIfPresent(id, forKey: .id)
+        try container.encode(userId, forKey: .userId)
         try container.encode(startDate, forKey: .startDate)
         try container.encode(endDate, forKey: .endDate)
+        try container.encode(endDate, forKey: .activityEndAt)
         try container.encode(activityType, forKey: .activityType)
         try container.encode(distanceMeters, forKey: .distanceMeters)
         try container.encode(durationSeconds, forKey: .durationSeconds)
@@ -156,10 +166,12 @@ extension ActivitySession {
     static func from(document: QueryDocumentSnapshot) -> ActivitySession {
         let data = document.data()
         let startDate = (data["startDate"] as? Timestamp)?.dateValue() ?? Date()
-        let endDate = (data["endDate"] as? Timestamp)?.dateValue() ?? Date()
+        let endDate = (data["endDate"] as? Timestamp)?.dateValue()
+        let activityEndAt = (data["activityEndAt"] as? Timestamp)?.dateValue()
         let activityType = data["activityType"] as? String ?? "otherOutdoor"
         let distanceMeters = data["distanceMeters"] as? Double ?? (data["distanceMeters"] as? NSNumber)?.doubleValue ?? 0
         let durationSeconds = data["durationSeconds"] as? Double ?? (data["durationSeconds"] as? NSNumber)?.doubleValue ?? 0
+        let userId = data["userId"] as? String ?? ""
         
         let routeArray = data["route"] as? [[String: Any]] ?? []
         let route: [ActivityRoutePoint] = routeArray.map { point in
@@ -199,8 +211,9 @@ extension ActivitySession {
         
         return ActivitySession(
             id: document.documentID,
+            userId: userId,
             startDate: startDate,
-            endDate: endDate,
+            endDate: endDate ?? activityEndAt ?? Date(),
             activityType: activityType,
             distanceMeters: distanceMeters,
             durationSeconds: durationSeconds,

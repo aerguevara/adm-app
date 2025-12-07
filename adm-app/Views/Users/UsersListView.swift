@@ -277,6 +277,14 @@ class UsersViewModel: ObservableObject {
                 }
             }
             
+            // Delete activities for user
+            let activities = try await firebaseManager.fetchActivities(filterUserId: userId)
+            for activity in activities {
+                if let id = activity.id {
+                    try await firebaseManager.deleteActivity(id: id)
+                }
+            }
+            
             // Delete territories for user
             let territories = try await firebaseManager.fetchTerritories(for: userId)
             for territory in territories {

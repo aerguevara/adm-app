@@ -57,26 +57,6 @@ struct UserDetailView: View {
                 Stepper("Previous Rank: \(viewModel.previousRank)", value: $viewModel.previousRank, in: 0...9999)
             }
             
-            Section("Activities") {
-                if viewModel.isLoadingActivities {
-                    ProgressView("Loading activities...")
-                } else if viewModel.activities.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Activities", systemImage: "figure.walk")
-                    } description: {
-                        Text("This user has no recorded activities")
-                    }
-                } else {
-                    ForEach(viewModel.activities) { activity in
-                        NavigationLink {
-                            ActivityDetailView(activity: activity)
-                        } label: {
-                            ActivityRow(activity: activity)
-                        }
-                    }
-                }
-            }
-            
             Section("Timestamps") {
                 LabeledContent("Joined At") {
                     Text(viewModel.joinedAt.mediumDate)
@@ -133,80 +113,6 @@ struct UserDetailView: View {
         }
         .task {
             await viewModel.loadTerritories()
-            await viewModel.loadActivities()
-        }
-    }
-}
-
-struct ActivityRow: View {
-    let activity: ActivitySession
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(activity.activityType.capitalized)
-                    .font(.headline)
-                Spacer()
-                Text(activity.startDate.shortDate)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            
-            HStack(spacing: 12) {
-                Label(durationString, systemImage: "clock")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                
-                Label(distanceString, systemImage: "figure.walk")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                
-                if activity.xpBreakdown.total > 0 {
-                    Label("+\(activity.xpBreakdown.total) XP", systemImage: "bolt.fill")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                }
-            }
-            
-            if activity.territoryStats.newCellsCount > 0 ||
-                activity.territoryStats.defendedCellsCount > 0 ||
-                activity.territoryStats.recapturedCellsCount > 0 {
-                HStack(spacing: 8) {
-                    if activity.territoryStats.newCellsCount > 0 {
-                        Label("\(activity.territoryStats.newCellsCount) new", systemImage: "sparkles")
-                            .font(.caption2)
-                            .foregroundStyle(.green)
-                    }
-                    if activity.territoryStats.defendedCellsCount > 0 {
-                        Label("\(activity.territoryStats.defendedCellsCount) defended", systemImage: "shield.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.blue)
-                    }
-                    if activity.territoryStats.recapturedCellsCount > 0 {
-                        Label("\(activity.territoryStats.recapturedCellsCount) recaptured", systemImage: "arrow.clockwise")
-                            .font(.caption2)
-                            .foregroundStyle(.purple)
-                    }
-                }
-            }
-        }
-        .padding(.vertical, 6)
-    }
-    
-    private var distanceString: String {
-        let km = activity.distanceMeters / 1000
-        return String(format: "%.2f km", km)
-    }
-    
-    private var durationString: String {
-        let totalSeconds = Int(activity.durationSeconds)
-        let hours = totalSeconds / 3600
-        let minutes = (totalSeconds % 3600) / 60
-        let seconds = totalSeconds % 60
-        if hours > 0 {
-            return String(format: "%dh %dm %ds", hours, minutes, seconds)
-        } else {
-            return String(format: "%dm %ds", minutes, seconds)
         }
     }
 }
@@ -224,8 +130,6 @@ class UserDetailViewModel: ObservableObject {
     @Published var errorMessage = ""
     @Published var territories: [RemoteTerritory] = []
     @Published var isLoadingTerritories = false
-    @Published var activities: [ActivitySession] = []
-    @Published var isLoadingActivities = false
     
     private let user: User
     private let firebaseManager = FirebaseManager.shared
@@ -289,18 +193,6 @@ class UserDetailViewModel: ObservableObject {
         isLoadingTerritories = false
     }
     
-    func loadActivities() async {
-        guard let userId = user.id else { return }
-        isLoadingActivities = true
-        do {
-            activities = try await firebaseManager.fetchActivities(for: userId)
-            activities.sort { $0.startDate > $1.startDate }
-        } catch {
-            errorMessage = error.localizedDescription
-            showError = true
-        }
-        isLoadingActivities = false
-    }
 }
 
 struct TerritoriesOverviewMapView: UIViewRepresentable {

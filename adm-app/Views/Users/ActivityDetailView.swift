@@ -37,6 +37,13 @@ struct ActivityDetailView: View {
             Text("\(activity.startDate.mediumDate) • \(durationString)")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                Image(systemName: "calendar")
+                    .foregroundStyle(.blue)
+                Text("Ends: \(activity.endDate.mediumDate)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
     

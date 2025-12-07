@@ -11,6 +11,7 @@ enum FirebaseCollection {
     static let users = "users"
     static let feed = "feed"
     static let territories = "remote_territories"
+    static let activities = "activities"
 }
 
 enum FeedType: String, CaseIterable {
