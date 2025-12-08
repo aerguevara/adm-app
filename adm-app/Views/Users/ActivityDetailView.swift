@@ -10,12 +10,16 @@ import MapKit
 
 struct ActivityDetailView: View {
     let activity: ActivitySession
+    private let firebaseManager = FirebaseManager.shared
     @State private var showRoutePoints = false
+    @State private var activityTerritories: [RemoteTerritory] = []
+    @State private var isLoadingTerritories = false
     
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 16) {
                 header
+                territoriesMiniMap
                 mapSection
                 metricsSection
                 xpSection
@@ -27,6 +31,9 @@ struct ActivityDetailView: View {
         }
         .navigationTitle("Activity")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await loadActivityTerritories()
+        }
     }
     
     private var header: some View {
@@ -53,6 +60,28 @@ struct ActivityDetailView: View {
                 ActivityMapView(route: activity.route)
                     .frame(height: 220)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+        }
+    }
+    
+    private var territoriesMiniMap: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Territories (mini mapa)")
+                .font(.headline)
+            
+            if isLoadingTerritories {
+                ProgressView("Cargando territorios...")
+            } else if activityTerritories.isEmpty {
+                ContentUnavailableView {
+                    Label("Sin territorios", systemImage: "map")
+                } description: {
+                    Text("Esta actividad no tiene territorios asociados")
+                }
+            } else {
+                TerritoriesOverviewMapContainer(territories: activityTerritories)
+                    .frame(height: 200)
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
             }
         }
     }
@@ -126,6 +155,18 @@ struct ActivityDetailView: View {
         activity.xpBreakdown.xpStreak +
         activity.xpBreakdown.xpWeeklyRecord +
         activity.xpBreakdown.xpBadges
+    }
+    
+    private func loadActivityTerritories() async {
+        guard let activityId = activity.id else { return }
+        isLoadingTerritories = true
+        defer { isLoadingTerritories = false }
+        do {
+            let territories = try await firebaseManager.fetchActivityTerritories(activityId: activityId)
+            activityTerritories = territories
+        } catch {
+            print("Error loading activity territories: \(error.localizedDescription)")
+        }
     }
     
     private var territorySection: some View {

@@ -285,7 +285,7 @@ class UsersViewModel: ObservableObject {
             let activities = try await firebaseManager.fetchActivities(filterUserId: userId)
             for activity in activities {
                 if let id = activity.id {
-                    try await firebaseManager.deleteActivity(id: id)
+                    try await firebaseManager.deleteActivityWithChildren(id: id)
                 }
             }
             
@@ -293,7 +293,7 @@ class UsersViewModel: ObservableObject {
             let territories = try await firebaseManager.fetchTerritories(for: userId)
             for territory in territories {
                 if let id = territory.id {
-                    try await firebaseManager.deleteTerritory(id: id)
+                    try await firebaseManager.deleteTerritoryWithChildren(id: id)
                 }
             }
             
