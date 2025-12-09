@@ -9,7 +9,7 @@ import SwiftUI
 
 struct MainAdminView: View {
     @State private var selectedTab = 0
-    
+
     var body: some View {
         TabView(selection: $selectedTab) {
             UsersListView()
@@ -36,6 +36,10 @@ struct MainAdminView: View {
                 }
                 .tag(3)
         }
+        .tabViewStyle(.automatic)
+        .tint(.blue)
+        .toolbarBackground(.ultraThinMaterial, for: .tabBar)
+        .toolbarBackground(.visible, for: .tabBar)
     }
 }
 

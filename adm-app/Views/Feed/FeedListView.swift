@@ -14,6 +14,7 @@ struct FeedListView: View {
     @State private var searchText = ""
     @State private var selectedType: String = "All"
     @State private var selectedUserId: String = FeedListView.allUsersFilterId
+    @State private var useGridLayout = true
     
     private static let allUsersFilterId = "__all_users__"
     
@@ -58,46 +59,37 @@ struct FeedListView: View {
         
         return [(FeedListView.allUsersFilterId, "All Users")] + sortedUsers
     }
-    
+
     var body: some View {
         NavigationStack {
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 16)], spacing: 16) {
-                    ForEach(filteredFeedItems) { item in
-                        VStack(alignment: .leading, spacing: 10) {
-                            NavigationLink(destination: FeedDetailView(feedItem: item.feedItem)) {
-                                FeedRow(item: item)
-                            }
+            VStack(spacing: 12) {
+                filterChips
+
+                ScrollView {
+                    if useGridLayout {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 16)], spacing: 16) {
+                            feedCards
                         }
                         .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 14)
-                                .fill(Color(.secondarySystemBackground))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .stroke(Color.primary.opacity(0.12), lineWidth: 1)
-                                )
-                                .shadow(color: Color.black.opacity(0.08), radius: 4, y: 2)
-                        )
-                        .contextMenu {
-                            Button(role: .destructive) {
-                                Task { await viewModel.deleteFeedItem(item.feedItem) }
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
+                    } else {
+                        LazyVStack(spacing: 12) {
+                            feedCards
                         }
+                        .padding(.horizontal)
+                        .padding(.bottom)
                     }
                 }
-                .padding()
-            }
-            .overlay {
-                if viewModel.isLoading {
-                    ProgressView("Loading feed...")
-                } else if filteredFeedItems.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Feed Items", systemImage: "list.bullet.clipboard")
-                    } description: {
-                        Text(searchText.isEmpty ? "No feed items found" : "No items match '\(searchText)'")
+                .overlay {
+                    if filteredFeedItems.isEmpty && !viewModel.isLoading {
+                        ContentUnavailableView {
+                            Label("No Feed Items", systemImage: "list.bullet.clipboard")
+                        } description: {
+                            Text(searchText.isEmpty ? "No feed items found" : "No items match '\(searchText)'")
+                        } actions: {
+                            Button("Add feed item") { showingAddFeed = true }
+                                .buttonStyle(.borderedProminent)
+                        }
+                        .padding()
                     }
                 }
             }
@@ -107,36 +99,20 @@ struct FeedListView: View {
                 await viewModel.loadFeedItems()
             }
             .toolbar {
-                ToolbarItemGroup(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .navigationBarLeading) {
                     Menu {
-                        Picker("Filter by Type", selection: $selectedType) {
-                            ForEach(feedTypes, id: \.self) { type in
-                                Text(type == "All" ? "All Types" : FeedType(rawValue: type)?.displayName ?? type)
-                            }
+                        Button(role: .destructive) {
+                            showingDeleteAllAlert = true
+                        } label: {
+                            Label("Delete visible items", systemImage: "trash.fill")
                         }
+                        .disabled(filteredFeedItems.isEmpty)
                     } label: {
-                        Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
-                    }
-                    
-                    Menu {
-                        Picker("Filter by User", selection: $selectedUserId) {
-                            ForEach(userFilterOptions, id: \.id) { option in
-                                Text(option.name).tag(option.id)
-                            }
-                        }
-                    } label: {
-                        Label("User Filter", systemImage: "person.2.circle")
+                        Label("Bulk actions", systemImage: "exclamationmark.triangle")
                     }
                 }
-                
-                ToolbarItemGroup(placement: .navigationBarTrailing) {
-                    Button(role: .destructive) {
-                        showingDeleteAllAlert = true
-                    } label: {
-                        Label("Delete All", systemImage: "trash.fill")
-                    }
-                    .disabled(viewModel.feedItemsWithUsers.isEmpty)
-                    
+
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         showingAddFeed = true
                     } label: {
@@ -174,8 +150,107 @@ struct FeedListView: View {
         .task {
             await viewModel.loadFeedItems()
         }
+        .loadingOverlay(isPresented: viewModel.isLoading, message: "Loading feed...")
     }
-    
+
+    private var filterChips: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(feedTypes, id: \.self) { type in
+                        let isSelected = selectedType == type
+                        Button {
+                            withAnimation { selectedType = type }
+                        } label: {
+                            InfoChip(text: type == "All" ? "All Types" : (FeedType(rawValue: type)?.displayName ?? type),
+                                     systemImage: "line.3.horizontal.decrease.circle",
+                                     tint: isSelected ? .blue : .gray,
+                                     filled: isSelected)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal)
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(userFilterOptions, id: \.id) { option in
+                        let isSelected = selectedUserId == option.id
+                        Button {
+                            withAnimation { selectedUserId = option.id }
+                        } label: {
+                            InfoChip(text: option.name,
+                                     systemImage: "person.crop.circle",
+                                     tint: isSelected ? .purple : .gray,
+                                     filled: isSelected)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal)
+            }
+
+            HStack {
+                Label("\(filteredFeedItems.count) items", systemImage: "sparkles")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                HStack(spacing: 8) {
+                    Button {
+                        withAnimation { useGridLayout = false }
+                    } label: {
+                        Image(systemName: "list.bullet")
+                            .padding(8)
+                            .background(useGridLayout ? Color.clear : Color.accentColor.opacity(0.15))
+                            .clipShape(Circle())
+                    }
+
+                    Button {
+                        withAnimation { useGridLayout = true }
+                    } label: {
+                        Image(systemName: "square.grid.2x2")
+                            .padding(8)
+                            .background(useGridLayout ? Color.accentColor.opacity(0.15) : Color.clear)
+                            .clipShape(Circle())
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal)
+        }
+    }
+
+    private var feedCards: some View {
+        ForEach(filteredFeedItems) { item in
+            VStack(alignment: .leading, spacing: 12) {
+                NavigationLink(destination: FeedDetailView(feedItem: item.feedItem)) {
+                    FeedRow(item: item)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color(.secondarySystemBackground))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                    )
+                    .shadow(color: Color.black.opacity(0.08), radius: 4, y: 2)
+            )
+            .contextMenu {
+                Button(role: .destructive) {
+                    Task { await viewModel.deleteFeedItem(item.feedItem) }
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+        }
+    }
+
     private func deleteFeedItems(at offsets: IndexSet) {
         Task {
             for index in offsets {
@@ -192,83 +267,57 @@ struct FeedListView: View {
 
 struct FeedRow: View {
     let item: FeedItemWithUser
-    
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(item.feedItem.title)
-                    .font(.headline)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "person.circle.fill")
+                            .foregroundStyle(.blue)
+                        Text(item.displayName)
+                            .font(.subheadline.weight(.semibold))
+                        if item.userLevel > 0 {
+                            InfoChip(text: "Lv \(item.userLevel)", systemImage: "star.fill", tint: .yellow, filled: false)
+                        }
+                        if item.userXP > 0 {
+                            InfoChip(text: "\(item.userXP) XP", systemImage: "bolt.fill", tint: .orange, filled: false)
+                        }
+                    }
+
+                    Text(item.feedItem.title)
+                        .font(.headline)
+                    Text(item.feedItem.subtitle)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
                 Spacer()
-                HStack(spacing: 4) {
-                    Image(systemName: "sparkles")
-                        .foregroundStyle(Color.rarityColor(for: item.feedItem.rarity))
-                        .font(.caption2)
-                    Text(item.feedItem.rarity.capitalized)
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(Color.rarityColor(for: item.feedItem.rarity))
+
+                VStack(alignment: .trailing, spacing: 6) {
+                    InfoChip(text: item.feedItem.rarity.capitalized,
+                             systemImage: "sparkles",
+                             tint: Color.rarityColor(for: item.feedItem.rarity))
+                    InfoChip(text: item.feedItem.date.shortDate,
+                             systemImage: "calendar",
+                             tint: .blue,
+                             filled: false)
                 }
             }
-            
-            Text(item.feedItem.subtitle)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-            
-            // User information section
+
             HStack(spacing: 8) {
-                Image(systemName: "person.circle.fill")
-                    .foregroundStyle(.blue)
-                    .font(.caption)
-                
-                Text(item.displayName)
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundStyle(.primary)
-                
-                if item.userLevel > 0 {
-                    HStack(spacing: 2) {
-                        Image(systemName: "star.fill")
-                            .foregroundStyle(.yellow)
-                            .font(.caption2)
-                        Text("Lv \(item.userLevel)")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                
-                if item.userXP > 0 {
-                    HStack(spacing: 2) {
-                        Image(systemName: "bolt.fill")
-                            .foregroundStyle(.orange)
-                            .font(.caption2)
-                        Text("\(item.userXP) XP")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-            .padding(.vertical, 2)
-            .padding(.horizontal, 8)
-            .background(Color.blue.opacity(0.08))
-            .cornerRadius(6)
-            
-            HStack {
-                Label(item.feedItem.type, systemImage: typeIcon(for: item.feedItem.type))
-                    .font(.caption)
-                    .foregroundStyle(.blue)
-                
+                InfoChip(text: FeedType(rawValue: item.feedItem.type)?.displayName ?? item.feedItem.type.capitalized,
+                         systemImage: typeIcon(for: item.feedItem.type),
+                         tint: .blue,
+                         filled: false)
+                InfoChip(text: item.feedItem.isPersonal ? "Personal" : "Compartido",
+                         systemImage: item.feedItem.isPersonal ? "person.fill" : "person.2.fill",
+                         tint: .purple,
+                         filled: false)
                 if item.feedItem.xpEarned > 0 {
-                    Label("+\(item.feedItem.xpEarned) XP", systemImage: "bolt.fill")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
+                    InfoChip(text: "+\(item.feedItem.xpEarned) XP", systemImage: "bolt.fill", tint: .orange)
                 }
-                
-                Spacer()
-                
-                Text(item.feedItem.date.shortDate)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
             }
         }
         .padding(.vertical, 4)

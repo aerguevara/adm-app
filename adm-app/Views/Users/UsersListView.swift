@@ -14,6 +14,7 @@ struct UsersListView: View {
     @State private var showingDeleteAllAlert = false
     @State private var showingResetAlert = false
     @State private var showingMasterWipeAlert = false
+    @State private var useGridLayout = true
     @State private var searchText = ""
     @State private var userToReset: User?
     
@@ -30,62 +31,64 @@ struct UsersListView: View {
     
     var body: some View {
         NavigationStack {
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 16)], spacing: 16) {
-                    ForEach(filteredUsers) { user in
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Text(user.displayName.isEmpty ? "No Name" : user.displayName)
-                                    .font(.headline)
-                                Spacer()
-                                Button(role: .destructive) {
-                                    userToReset = user
-                                    showingResetAlert = true
-                                } label: {
-                                    Label("Reset", systemImage: "arrow.counterclockwise.circle")
-                                }
-                                .labelStyle(.iconOnly)
-                                .buttonStyle(.borderedProminent)
-                                .tint(.orange)
-                            }
-                            
-                            NavigationLink(destination: UserDetailView(user: user)) {
-                                UserRow(user: user)
-                            }
+            VStack(spacing: 12) {
+                HStack {
+                    Label("\(filteredUsers.count) users", systemImage: "person.3")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    HStack(spacing: 8) {
+                        Button {
+                            withAnimation { useGridLayout = false }
+                        } label: {
+                            Image(systemName: "list.bullet")
+                                .imageScale(.medium)
+                                .padding(8)
+                                .background(useGridLayout ? Color.clear : Color.accentColor.opacity(0.15))
+                                .clipShape(Circle())
                         }
-                        .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 14)
-                                .fill(Color(.secondarySystemBackground))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .stroke(Color.primary.opacity(0.12), lineWidth: 1)
-                                )
-                                .shadow(color: Color.black.opacity(0.08), radius: 4, y: 2)
-                        )
-                        .contextMenu {
-                            Button(role: .destructive) {
-                                Task {
-                                    await viewModel.deleteUser(user)
-                                }
-                            } label: {
-                                Label("Delete User", systemImage: "trash")
-                            }
+
+                        Button {
+                            withAnimation { useGridLayout = true }
+                        } label: {
+                            Image(systemName: "square.grid.2x2")
+                                .imageScale(.medium)
+                                .padding(8)
+                                .background(useGridLayout ? Color.accentColor.opacity(0.15) : Color.clear)
+                                .clipShape(Circle())
                         }
                     }
+                    .buttonStyle(.plain)
                 }
-                .padding()
-            }
-            .overlay {
-                if viewModel.isLoading {
-                    ProgressView("Loading users...")
-                } else if viewModel.isMasterWiping {
-                    ProgressView("Ejecutando borrado maestro...")
-                } else if filteredUsers.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Users", systemImage: "person.slash")
-                    } description: {
-                        Text(searchText.isEmpty ? "No users found in the database" : "No users match '\(searchText)'")
+                .padding(.horizontal)
+
+                ScrollView {
+                    if useGridLayout {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 16)], spacing: 16) {
+                            userCards
+                        }
+                        .padding()
+                    } else {
+                        LazyVStack(spacing: 12) {
+                            userCards
+                        }
+                        .padding(.horizontal)
+                        .padding(.bottom)
+                    }
+                }
+                .overlay {
+                    if filteredUsers.isEmpty && !(viewModel.isLoading || viewModel.isMasterWiping) {
+                        ContentUnavailableView {
+                            Label("No Users", systemImage: "person.slash")
+                        } description: {
+                            Text(searchText.isEmpty ? "No users found in the database" : "No users match '\(searchText)'")
+                        } actions: {
+                            Button("Add user") { showingAddUser = true }
+                                .buttonStyle(.borderedProminent)
+                        }
+                        .padding()
                     }
                 }
             }
@@ -96,23 +99,25 @@ struct UsersListView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button(role: .destructive) {
-                        showingDeleteAllAlert = true
+                    Menu {
+                        Button(role: .destructive) {
+                            showingDeleteAllAlert = true
+                        } label: {
+                            Label("Delete All", systemImage: "trash.fill")
+                        }
+                        .disabled(viewModel.users.isEmpty)
+
+                        Button(role: .destructive) {
+                            showingMasterWipeAlert = true
+                        } label: {
+                            Label("Borrado maestro", systemImage: "exclamationmark.triangle.fill")
+                        }
+                        .disabled(viewModel.isMasterWiping)
                     } label: {
-                        Label("Delete All", systemImage: "trash.fill")
+                        Label("Bulk actions", systemImage: "exclamationmark.triangle")
                     }
-                    .disabled(viewModel.users.isEmpty)
                 }
-                
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(role: .destructive) {
-                        showingMasterWipeAlert = true
-                    } label: {
-                        Label("Borrado maestro", systemImage: "exclamationmark.triangle.fill")
-                    }
-                    .disabled(viewModel.isMasterWiping)
-                }
-                
+
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         Task {
@@ -123,7 +128,7 @@ struct UsersListView: View {
                     }
                     .disabled(viewModel.users.isEmpty)
                 }
-                
+
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         showingAddUser = true
@@ -179,58 +184,83 @@ struct UsersListView: View {
                 }
             }
         }
+        .loadingOverlay(isPresented: viewModel.isLoading || viewModel.isMasterWiping,
+                        message: viewModel.isMasterWiping ? "Ejecutando borrado maestro..." : "Loading users...")
         .task {
             await viewModel.loadUsers()
         }
     }
-    
-    private func deleteUsers(at offsets: IndexSet) {
-        Task {
-            for index in offsets {
-                let user = filteredUsers[index]
-                await viewModel.deleteUser(user)
+
+    private var userCards: some View {
+        ForEach(filteredUsers) { user in
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .center) {
+                    Text(user.displayName.isEmpty ? "No Name" : user.displayName)
+                        .font(.headline)
+                    Spacer()
+                    Menu {
+                        Button {
+                            userToReset = user
+                            showingResetAlert = true
+                        } label: {
+                            Label("Reset progress", systemImage: "arrow.counterclockwise.circle")
+                        }
+
+                        Button(role: .destructive) {
+                            Task { await viewModel.deleteUser(user) }
+                        } label: {
+                            Label("Delete user", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                NavigationLink(destination: UserDetailView(user: user)) {
+                    UserRow(user: user)
+                }
+                .buttonStyle(.plain)
             }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color(.secondarySystemBackground))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                    )
+                    .shadow(color: Color.black.opacity(0.08), radius: 4, y: 2)
+            )
         }
     }
 }
 
 struct UserRow: View {
     let user: User
-    
+
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             AvatarView(urlString: user.avatarURL, size: 44)
-            
+
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text(user.displayName.isEmpty ? "No Name" : user.displayName)
                         .font(.headline)
                     Spacer()
-                    HStack(spacing: 4) {
-                        Image(systemName: "star.fill")
-                            .foregroundStyle(.yellow)
-                            .font(.caption2)
-                        Text("Lv \(user.level)")
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.secondary)
-                    }
+                    InfoChip(text: "Lv \(user.level)", systemImage: "star.fill", tint: .yellow)
+                        .font(.caption)
                 }
-                
+
                 Text(user.email ?? "No email")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                
-                HStack {
-                    Label("\(user.xp) XP", systemImage: "bolt.fill")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                    
+
+                HStack(spacing: 8) {
+                    InfoChip(text: "\(user.xp) XP", systemImage: "bolt.fill", tint: .orange)
                     Spacer()
-                    
-                    Text("Joined: \(user.joinedAt.shortDate)")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                    InfoChip(text: "Joined \(user.joinedAt.shortDate)", systemImage: "calendar", tint: .blue, filled: false)
                 }
             }
         }
