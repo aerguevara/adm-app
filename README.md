@@ -11,6 +11,31 @@ iOS admin interface for managing Firebase Firestore collections with full CRUD o
 - **Search & Filter** - Find data quickly with search bars and type filters
 - **Native iOS Design** - Built with SwiftUI for a modern, native experience
 
+## 🎨 UI/UX improvements in progress
+
+To address the audit findings and streamline day-to-day admin work, the app roadmap now includes:
+
+- **Navigation & visibility**
+  - Tab bar with blurred background and clear active pill to anchor context switching.
+  - Persisted, on-canvas filters (chips/segments) per section so active filters are always visible.
+
+- **Safer bulk actions**
+  - Destructive operations (Delete All, Borrado maestro) moved into an overflow/⚠️ menu or footer banner, away from primary actions.
+  - Individual user resets demoted to swipe/context menus to reduce accidental taps.
+
+- **Consistent cards & chips**
+  - Unified chip style for type, rarity, XP, level, and status across Users, Feed, and Territories.
+  - Activity and feed cards reorganized so headers show avatar + user context with a single row of chips (rareza/tipo/XP) and territory impacts highlighted with icons.
+
+- **Loading, empty, and feedback states**
+  - Light overlay spinners instead of full replacements, keeping previous content visible during loads.
+  - Empty states upgraded with CTAs ("Agregar feed", "Crear actividad") plus optional illustrations.
+  - Toasts/banners for success and error messaging on bulk operations.
+
+- **Cross-links & density controls**
+  - Quick links from activities/territories to related feeds and recent territory activity.
+  - Toggle between grid and compact list layouts for Users and Feed to balance density vs. readability.
+
 ## 🗂️ Collections
 
 ### Users
