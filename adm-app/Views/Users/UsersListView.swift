@@ -13,6 +13,7 @@ struct UsersListView: View {
     @State private var showingAddUser = false
     @State private var showingDeleteAllAlert = false
     @State private var showingResetAlert = false
+    @State private var showingMasterWipeAlert = false
     @State private var searchText = ""
     @State private var userToReset: User?
     
@@ -78,6 +79,8 @@ struct UsersListView: View {
             .overlay {
                 if viewModel.isLoading {
                     ProgressView("Loading users...")
+                } else if viewModel.isMasterWiping {
+                    ProgressView("Ejecutando borrado maestro...")
                 } else if filteredUsers.isEmpty {
                     ContentUnavailableView {
                         Label("No Users", systemImage: "person.slash")
@@ -99,6 +102,15 @@ struct UsersListView: View {
                         Label("Delete All", systemImage: "trash.fill")
                     }
                     .disabled(viewModel.users.isEmpty)
+                }
+                
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(role: .destructive) {
+                        showingMasterWipeAlert = true
+                    } label: {
+                        Label("Borrado maestro", systemImage: "exclamationmark.triangle.fill")
+                    }
+                    .disabled(viewModel.isMasterWiping)
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -145,6 +157,14 @@ struct UsersListView: View {
                 }
             } message: {
                 Text("Are you sure you want to delete ALL \(viewModel.users.count) users? This action cannot be undone.")
+            }
+            .alert("Borrado maestro", isPresented: $showingMasterWipeAlert) {
+                Button("Cancelar", role: .cancel) {}
+                Button("Borrar todo", role: .destructive) {
+                    Task { await viewModel.masterWipeAllData() }
+                }
+            } message: {
+                Text("Esto eliminará TODOS los datos de activities (con subcolecciones), feed y remote_territories de todos los usuarios. No elimina las cuentas. ¿Continuar?")
             }
             .alert("Error", isPresented: $viewModel.showError) {
                 Button("OK", role: .cancel) {}
@@ -222,6 +242,7 @@ struct UserRow: View {
 class UsersViewModel: ObservableObject {
     @Published var users: [User] = []
     @Published var isLoading = false
+    @Published var isMasterWiping = false
     @Published var showError = false
     @Published var errorMessage = ""
     
@@ -320,6 +341,41 @@ class UsersViewModel: ObservableObject {
             showError = true
         }
         isLoading = false
+    }
+    
+    func masterWipeAllData() async {
+        isMasterWiping = true
+        defer { isMasterWiping = false }
+        do {
+            // Reset all users XP/level
+            for var user in users {
+                user.xp = 0
+                user.level = 1
+                try await firebaseManager.updateUser(user)
+            }
+            
+            // Feed
+            let feedItems = try await firebaseManager.fetchFeedItems()
+            for item in feedItems {
+                if let id = item.id {
+                    try await firebaseManager.deleteFeedItem(id: id)
+                }
+            }
+            
+            // Activities (with subcollections)
+            let activities = try await firebaseManager.fetchActivities()
+            for activity in activities {
+                if let id = activity.id {
+                    try await firebaseManager.deleteActivityWithChildren(id: id)
+                }
+            }
+            
+            // Territories (with subcollections)
+            try await firebaseManager.deleteTerritories()
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
     }
     
     func closeWeeklyRanking() async {

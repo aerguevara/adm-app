@@ -302,6 +302,10 @@ class FirebaseManager: ObservableObject {
     func deleteActivityWithChildren(id: String) async throws {
         // Delete territories subcollection if present
         try? await deleteSubcollectionDocuments(parentCollection: FirebaseCollection.activities, documentId: id, subcollection: "territories")
+        // Delete routes subcollections if present (cover possible names)
+        try? await deleteSubcollectionDocuments(parentCollection: FirebaseCollection.activities, documentId: id, subcollection: "routes")
+        try? await deleteSubcollectionDocuments(parentCollection: FirebaseCollection.activities, documentId: id, subcollection: "route")
+        try? await deleteSubcollectionDocuments(parentCollection: FirebaseCollection.activities, documentId: id, subcollection: "routePoints")
         // Delete the activity document
         try await deleteActivity(id: id)
     }
@@ -311,6 +315,20 @@ class FirebaseManager: ObservableObject {
         try? await deleteSubcollectionDocuments(parentCollection: FirebaseCollection.territories, documentId: id, subcollection: "territories")
         try? await deleteSubcollectionDocuments(parentCollection: FirebaseCollection.territories, documentId: id, subcollection: "owners")
         try await deleteTerritory(id: id)
+    }
+    
+    func deleteTerritories(filterUserId: String? = nil) async throws {
+        let collection = db.collection(FirebaseCollection.territories)
+        let snapshot: QuerySnapshot
+        if let userId = filterUserId {
+            snapshot = try await collection.whereField("userId", isEqualTo: userId).getDocuments(source: .server)
+        } else {
+            snapshot = try await collection.getDocuments(source: .server)
+        }
+        
+        for doc in snapshot.documents {
+            try await deleteTerritoryWithChildren(id: doc.documentID)
+        }
     }
     
     // MARK: - Territory History (owners subcollection)

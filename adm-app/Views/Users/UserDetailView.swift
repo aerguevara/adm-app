@@ -12,6 +12,7 @@ struct UserDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel: UserDetailViewModel
     @State private var showingDeleteAlert = false
+    @State private var showingMasterWipeAlert = false
     @State private var showingFollowSheet = false
     @State private var followSearchText = ""
     
@@ -143,6 +144,14 @@ struct UserDetailView: View {
                     Label("Delete User", systemImage: "trash")
                         .frame(maxWidth: .infinity, alignment: .center)
                 }
+                
+                Button(role: .destructive) {
+                    showingMasterWipeAlert = true
+                } label: {
+                    Label("Borrado maestro", systemImage: "exclamationmark.triangle.fill")
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .disabled(viewModel.isMasterWiping)
             }
         }
         .navigationTitle("User Details")
@@ -172,6 +181,16 @@ struct UserDetailView: View {
             }
         } message: {
             Text("Are you sure you want to delete this user? This action cannot be undone.")
+        }
+        .alert("Borrado maestro", isPresented: $showingMasterWipeAlert) {
+            Button("Cancelar", role: .cancel) {}
+            Button("Borrar todo", role: .destructive) {
+                Task {
+                    await viewModel.masterWipeData()
+                }
+            }
+        } message: {
+            Text("Esto eliminará actividades (y sus subcolecciones), feed y remote_territories de este usuario. No se eliminará la cuenta. ¿Continuar?")
         }
         .alert("Error", isPresented: $viewModel.showError) {
             Button("OK", role: .cancel) {}
@@ -338,6 +357,7 @@ class UserDetailViewModel: ObservableObject {
     @Published var isLoadingFollowing = false
     @Published var allUsers: [User] = []
     @Published var isLoadingAllUsers = false
+    @Published var isMasterWiping = false
     
     private let user: User
     private let firebaseManager = FirebaseManager.shared
@@ -488,6 +508,40 @@ class UserDetailViewModel: ObservableObject {
         do {
             try await firebaseManager.removeFollower(userId: currentId, followerUserId: followerId)
             await loadFollowers()
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+    
+    func masterWipeData() async {
+        guard let userId = user.id else { return }
+        isMasterWiping = true
+        defer { isMasterWiping = false }
+        do {
+            // Feed
+            let feedItems = try await firebaseManager.fetchFeedItems(for: userId)
+            for item in feedItems {
+                if let id = item.id {
+                    try await firebaseManager.deleteFeedItem(id: id)
+                }
+            }
+            
+            // Activities + subcollections
+            let activities = try await firebaseManager.fetchActivities(filterUserId: userId)
+            for activity in activities {
+                if let id = activity.id {
+                    try await firebaseManager.deleteActivityWithChildren(id: id)
+                }
+            }
+            
+            // Territories + subcollections
+            let territories = try await firebaseManager.fetchTerritories(for: userId)
+            for territory in territories {
+                if let id = territory.id {
+                    try await firebaseManager.deleteTerritoryWithChildren(id: id)
+                }
+            }
         } catch {
             errorMessage = error.localizedDescription
             showError = true
