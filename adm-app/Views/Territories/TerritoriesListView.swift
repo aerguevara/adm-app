@@ -49,43 +49,48 @@ struct TerritoriesListView: View {
     
     var body: some View {
         NavigationStack {
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 16)], spacing: 16) {
-                    ForEach(filteredTerritories) { territoryWithUser in
-                        VStack(alignment: .leading, spacing: 10) {
-                            NavigationLink(destination: TerritoryDetailView(territory: territoryWithUser.territory)) {
-                                TerritoryRow(territory: territoryWithUser)
+            VStack(spacing: 12) {
+                userFilterChips
+
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 16)], spacing: 16) {
+                        ForEach(filteredTerritories) { territoryWithUser in
+                            VStack(alignment: .leading, spacing: 10) {
+                                NavigationLink(destination: TerritoryDetailView(territory: territoryWithUser.territory)) {
+                                    TerritoryRow(territory: territoryWithUser)
+                                }
                             }
-                        }
-                        .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 14)
-                                .fill(Color(.secondarySystemBackground))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .stroke(Color.primary.opacity(0.12), lineWidth: 1)
-                                )
-                                .shadow(color: Color.black.opacity(0.08), radius: 4, y: 2)
-                        )
-                        .contextMenu {
-                            Button(role: .destructive) {
-                                Task { await viewModel.deleteTerritory(territoryWithUser) }
-                            } label: {
-                                Label("Delete", systemImage: "trash")
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(Color(.secondarySystemBackground))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                                    )
+                                    .shadow(color: Color.black.opacity(0.08), radius: 4, y: 2)
+                            )
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    Task { await viewModel.deleteTerritory(territoryWithUser) }
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
                             }
                         }
                     }
+                    .padding()
                 }
-                .padding()
-            }
-            .overlay {
-                if viewModel.isLoading {
-                    ProgressView("Loading territories...")
-                } else if filteredTerritories.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Territories", systemImage: "map")
-                    } description: {
-                        Text(searchText.isEmpty ? "No territories found" : "No territories match '\(searchText)'")
+                .overlay {
+                    if filteredTerritories.isEmpty && !viewModel.isLoading {
+                        ContentUnavailableView {
+                            Label("No Territories", systemImage: "map")
+                        } description: {
+                            Text(searchText.isEmpty ? "No territories found" : "No territories match '\(searchText)'")
+                        } actions: {
+                            Button("Reload") { Task { await viewModel.loadTerritories() } }
+                                .buttonStyle(.borderedProminent)
+                        }
                     }
                 }
             }
@@ -96,24 +101,24 @@ struct TerritoriesListView: View {
             }
             .toolbar {
                 ToolbarItemGroup(placement: .navigationBarLeading) {
-                    Button(role: .destructive) {
-                        showingDeleteAllAlert = true
-                    } label: {
-                        Label("Delete All", systemImage: "trash.fill")
-                    }
-                    .disabled(viewModel.territoriesWithUsers.isEmpty)
-                    
                     Menu {
+                        Button(role: .destructive) {
+                            showingDeleteAllAlert = true
+                        } label: {
+                            Label("Delete All", systemImage: "trash.fill")
+                        }
+                        .disabled(viewModel.territoriesWithUsers.isEmpty)
+
                         Picker("Filter by User", selection: $selectedUserId) {
                             ForEach(userFilterOptions, id: \.id) { option in
                                 Text(option.name).tag(option.id)
                             }
                         }
                     } label: {
-                        Label("User Filter", systemImage: "person.2.circle")
+                        Label("Bulk & filter", systemImage: "line.3.horizontal.decrease.circle")
                     }
                 }
-                
+
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         showingAddTerritory = true
@@ -152,8 +157,30 @@ struct TerritoriesListView: View {
         .task {
             await viewModel.loadTerritories()
         }
+        .loadingOverlay(isPresented: viewModel.isLoading, message: "Loading territories...")
     }
-    
+
+    private var userFilterChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(userFilterOptions, id: \.id) { option in
+                    let isSelected = selectedUserId == option.id
+                    Button {
+                        withAnimation { selectedUserId = option.id }
+                    } label: {
+                        InfoChip(text: option.name,
+                                 systemImage: "person.crop.circle",
+                                 tint: isSelected ? .blue : .gray,
+                                 filled: isSelected)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal)
+        }
+        .padding(.bottom, 4)
+    }
+
     private func deleteTerritories(at offsets: IndexSet) {
         Task {
             for index in offsets {
@@ -173,22 +200,15 @@ struct TerritoryRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Label("Territory", systemImage: "map.fill")
+                Text("Territory")
                     .font(.headline)
-                
                 Spacer()
-                
-                if territory.territory.isExpired {
-                    Label("Expired", systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                } else {
-                    Label("Active", systemImage: "checkmark.circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.green)
-                }
+                InfoChip(text: territory.territory.isExpired ? "Expired" : "Active",
+                         systemImage: territory.territory.isExpired ? "exclamationmark.triangle.fill" : "checkmark.circle.fill",
+                         tint: territory.territory.isExpired ? .red : .green,
+                         filled: false)
             }
-            
+
             if let id = territory.territory.id {
                 Text("ID: \(id)")
                     .font(.caption2)
@@ -208,24 +228,15 @@ struct TerritoryRow: View {
             }
             
             HStack {
-                Label(territory.displayName, systemImage: "person.fill")
-                    .font(.caption)
-                    .foregroundStyle(.blue)
-                    .lineLimit(1)
-                
+                InfoChip(text: territory.displayName, systemImage: "person.fill", tint: .blue, filled: false)
+
                 Spacer()
-                
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("Created: \(territory.territory.timestamp.shortDate)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    Text("Expires: \(territory.territory.expiresAt.shortDate)")
-                        .font(.caption2)
-                        .foregroundStyle(territory.territory.isExpired ? .red : .secondary)
+
+                VStack(alignment: .trailing, spacing: 6) {
+                    InfoChip(text: "Created \(territory.territory.timestamp.shortDate)", systemImage: "calendar", tint: .blue, filled: false)
+                    InfoChip(text: "Expires \(territory.territory.expiresAt.shortDate)", systemImage: "clock.badge.exclamationmark", tint: territory.territory.isExpired ? .red : .orange, filled: false)
                     if let activityEndAt = territory.territory.activityEndAt {
-                        Text("Activity Ends: \(activityEndAt.shortDate)")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                        InfoChip(text: "Activity Ends \(activityEndAt.shortDate)", systemImage: "clock", tint: .purple, filled: false)
                     }
                 }
             }

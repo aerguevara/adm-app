@@ -61,7 +61,9 @@ struct ActivitiesListView: View {
                 }
                 .padding(.horizontal)
                 .padding(.top, 6)
-                
+
+                userFilterChips
+
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), spacing: 16)], spacing: 16) {
                         ForEach(filteredActivities) { item in
@@ -77,13 +79,16 @@ struct ActivitiesListView: View {
                 }
             }
             .overlay {
-                if viewModel.isLoading {
-                    ProgressView("Loading activities...")
-                } else if filteredActivities.isEmpty {
+                if filteredActivities.isEmpty && !viewModel.isLoading {
                     ContentUnavailableView {
                         Label("No Activities", systemImage: "figure.walk")
                     } description: {
                         Text(searchText.isEmpty ? "No activities found" : "No activities match '\(searchText)'")
+                    } actions: {
+                        Button("Reload") {
+                            Task { await viewModel.loadActivities() }
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
                 }
             }
@@ -91,19 +96,6 @@ struct ActivitiesListView: View {
             .searchable(text: $searchText, prompt: "Search by user or activity")
             .refreshable {
                 await viewModel.loadActivities()
-            }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Menu {
-                        Picker("Filtrar por usuario", selection: $selectedUserId) {
-                            ForEach(userFilterOptions, id: \.id) { option in
-                                Text(option.name).tag(option.id)
-                            }
-                        }
-                    } label: {
-                        Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
-                    }
-                }
             }
             .alert("Error", isPresented: $viewModel.showError) {
                 Button("OK", role: .cancel) {}
@@ -114,74 +106,74 @@ struct ActivitiesListView: View {
         .task {
             await viewModel.loadActivities()
         }
+        .loadingOverlay(isPresented: viewModel.isLoading, message: "Loading activities...")
+    }
+
+    private var userFilterChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(userFilterOptions, id: \.id) { option in
+                    let isSelected = selectedUserId == option.id
+                    Button {
+                        withAnimation { selectedUserId = option.id }
+                    } label: {
+                        InfoChip(text: option.name,
+                                 systemImage: "person.crop.circle",
+                                 tint: isSelected ? .blue : .gray,
+                                 filled: isSelected)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal)
+        }
+        .padding(.bottom, 4)
     }
 }
 
 struct ActivityCardView: View {
     let item: ActivityWithUser
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(item.displayName.isEmpty ? "Unknown User" : item.displayName)
                         .font(.headline)
-                    HStack(spacing: 6) {
+
+                    HStack(spacing: 8) {
                         if item.userLevel > 0 {
-                            HStack(spacing: 2) {
-                                Image(systemName: "star.fill")
-                                    .foregroundStyle(.yellow)
-                                    .font(.caption2)
-                                Text("Lv \(item.userLevel)")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
+                            InfoChip(text: "Lv \(item.userLevel)", systemImage: "star.fill", tint: .yellow, filled: false)
                         }
-                        Text(item.activity.startDate.mediumDate)
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                        InfoChip(text: item.activity.startDate.mediumDate, systemImage: "calendar", tint: .blue, filled: false)
                     }
                 }
-                
+
                 Spacer()
-                
-                Text(item.activity.activityType.capitalized)
-                    .font(.subheadline.weight(.semibold))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.blue.opacity(0.12))
-                    .clipShape(Capsule())
+
+                InfoChip(text: item.activity.activityType.capitalized,
+                         systemImage: "figure.walk",
+                         tint: .blue)
             }
-            
-            Text(quickSummary)
-                .font(.subheadline)
-            
-            HStack(spacing: 12) {
-                Label(distanceString, systemImage: "figure.walk")
-                Label(durationString, systemImage: "clock")
+
+            HStack(spacing: 8) {
+                InfoChip(text: distanceString, systemImage: "figure.walk", tint: .green, filled: false)
+                InfoChip(text: durationString, systemImage: "clock", tint: .purple, filled: false)
                 if item.activity.xpBreakdown.total > 0 {
-                    Label("+\(item.activity.xpBreakdown.total) XP", systemImage: "bolt.fill")
+                    InfoChip(text: "+\(item.activity.xpBreakdown.total) XP", systemImage: "bolt.fill", tint: .orange)
                 }
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            
+
             if hasTerritoryImpact {
                 HStack(spacing: 10) {
                     if item.activity.territoryStats.newCellsCount > 0 {
-                        Label("\(item.activity.territoryStats.newCellsCount) new", systemImage: "sparkles")
-                            .font(.caption2)
-                            .foregroundStyle(.green)
+                        InfoChip(text: "\(item.activity.territoryStats.newCellsCount) new", systemImage: "sparkles", tint: .green, filled: false)
                     }
                     if item.activity.territoryStats.defendedCellsCount > 0 {
-                        Label("\(item.activity.territoryStats.defendedCellsCount) defended", systemImage: "shield.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.blue)
+                        InfoChip(text: "\(item.activity.territoryStats.defendedCellsCount) defended", systemImage: "shield.fill", tint: .blue, filled: false)
                     }
                     if item.activity.territoryStats.recapturedCellsCount > 0 {
-                        Label("\(item.activity.territoryStats.recapturedCellsCount) recaptured", systemImage: "arrow.clockwise")
-                            .font(.caption2)
-                            .foregroundStyle(.purple)
+                        InfoChip(text: "\(item.activity.territoryStats.recapturedCellsCount) recaptured", systemImage: "arrow.clockwise", tint: .purple, filled: false)
                     }
                 }
             }
@@ -197,21 +189,6 @@ struct ActivityCardView: View {
                 )
                 .shadow(color: Color.black.opacity(0.08), radius: 4, y: 2)
         )
-    }
-    
-    private var quickSummary: String {
-        var parts: [String] = []
-        if item.activity.distanceMeters > 0 {
-            parts.append(distanceString)
-        }
-        parts.append(durationString)
-        if item.activity.xpBreakdown.total > 0 {
-            parts.append("+\(item.activity.xpBreakdown.total) XP")
-        }
-        if parts.isEmpty {
-            parts.append("No metrics recorded")
-        }
-        return parts.joined(separator: " • ")
     }
     
     private var distanceString: String {
