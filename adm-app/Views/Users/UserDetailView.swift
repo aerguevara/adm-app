@@ -22,6 +22,17 @@ struct UserDetailView: View {
     
     var body: some View {
         Form {
+            Section {
+                HStack(spacing: 8) {
+                    InfoChip(text: "Lv \(viewModel.level)", systemImage: "star.fill", tint: .yellow)
+                    InfoChip(text: "\(viewModel.xp) XP", systemImage: "bolt.fill", tint: .orange, filled: false)
+                    if let lastUpdated = viewModel.lastUpdated {
+                        InfoChip(text: lastUpdated.shortDate, systemImage: "clock.arrow.circlepath", tint: .blue, filled: false)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
             Section("Perfil") {
                 HStack(spacing: 16) {
                     AvatarView(urlString: viewModel.avatarURL, size: 64)
@@ -156,6 +167,8 @@ struct UserDetailView: View {
         }
         .navigationTitle("User Details")
         .navigationBarTitleDisplayMode(.inline)
+        .scrollContentBackground(.hidden)
+        .background(Color(.systemGroupedBackground))
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button("Save") {

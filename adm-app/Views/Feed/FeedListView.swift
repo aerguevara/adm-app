@@ -63,6 +63,7 @@ struct FeedListView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 12) {
+                header
                 filterChips
 
                 ScrollView {
@@ -151,6 +152,32 @@ struct FeedListView: View {
             await viewModel.loadFeedItems()
         }
         .loadingOverlay(isPresented: viewModel.isLoading, message: "Loading feed...")
+        .groupedBackground()
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Noticias y logros")
+                    .font(.title3.weight(.semibold))
+                Text("Explora eventos, logros y acciones compartidas por la comunidad")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 8) {
+                InfoChip(text: "\(filteredFeedItems.count) items", systemImage: "sparkles", tint: .purple, filled: false)
+                InfoChip(text: useGridLayout ? "Vista de tarjetas" : "Vista de lista", systemImage: "rectangle.grid.2x2", tint: .blue, filled: false)
+                Spacer()
+                Picker("Layout", selection: $useGridLayout) {
+                    Text("Tarjetas").tag(true)
+                    Text("Lista").tag(false)
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 220)
+            }
+        }
+        .padding(.horizontal)
     }
 
     private var filterChips: some View {
@@ -231,16 +258,7 @@ struct FeedListView: View {
                 }
                 .buttonStyle(.plain)
             }
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(Color(.secondarySystemBackground))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(Color.primary.opacity(0.12), lineWidth: 1)
-                    )
-                    .shadow(color: Color.black.opacity(0.08), radius: 4, y: 2)
-            )
+            .cardStyle()
             .contextMenu {
                 Button(role: .destructive) {
                     Task { await viewModel.deleteFeedItem(item.feedItem) }

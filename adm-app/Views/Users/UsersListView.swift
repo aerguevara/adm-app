@@ -31,61 +31,32 @@ struct UsersListView: View {
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 12) {
-                HStack {
-                    Label("\(filteredUsers.count) users", systemImage: "person.3")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
-
-                    Spacer()
-
-                    HStack(spacing: 8) {
-                        Button {
-                            withAnimation { useGridLayout = false }
-                        } label: {
-                            Image(systemName: "list.bullet")
-                                .imageScale(.medium)
-                                .padding(8)
-                                .background(useGridLayout ? Color.clear : Color.accentColor.opacity(0.15))
-                                .clipShape(Circle())
-                        }
-
-                        Button {
-                            withAnimation { useGridLayout = true }
-                        } label: {
-                            Image(systemName: "square.grid.2x2")
-                                .imageScale(.medium)
-                                .padding(8)
-                                .background(useGridLayout ? Color.accentColor.opacity(0.15) : Color.clear)
-                                .clipShape(Circle())
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal)
+            VStack(spacing: 16) {
+                header
 
                 ScrollView {
                     if useGridLayout {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 16)], spacing: 16) {
                             userCards
                         }
-                        .padding()
+                        .padding(.horizontal)
+                        .padding(.bottom, 12)
                     } else {
                         LazyVStack(spacing: 12) {
                             userCards
                         }
                         .padding(.horizontal)
-                        .padding(.bottom)
+                        .padding(.bottom, 12)
                     }
                 }
                 .overlay {
                     if filteredUsers.isEmpty && !(viewModel.isLoading || viewModel.isMasterWiping) {
                         ContentUnavailableView {
-                            Label("No Users", systemImage: "person.slash")
+                            Label("Sin usuarios", systemImage: "person.slash")
                         } description: {
-                            Text(searchText.isEmpty ? "No users found in the database" : "No users match '\(searchText)'")
+                            Text(searchText.isEmpty ? "Aún no hay usuarios registrados" : "No hay resultados para '\(searchText)'")
                         } actions: {
-                            Button("Add user") { showingAddUser = true }
+                            Button("Agregar usuario") { showingAddUser = true }
                                 .buttonStyle(.borderedProminent)
                         }
                         .padding()
@@ -189,6 +160,32 @@ struct UsersListView: View {
         .task {
             await viewModel.loadUsers()
         }
+        .groupedBackground()
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Directorio de usuarios")
+                    .font(.title3.weight(.semibold))
+                Text("Gestiona perfiles, progreso y estado de manera segura")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 8) {
+                InfoChip(text: "\(filteredUsers.count) visibles", systemImage: "person.3", tint: .blue, filled: false)
+                InfoChip(text: viewModel.isMasterWiping ? "Borrando datos" : "Sync en vivo", systemImage: "bolt.horizontal.fill", tint: viewModel.isMasterWiping ? .orange : .green, filled: false)
+                Spacer()
+                Picker("Layout", selection: $useGridLayout) {
+                    Text("Tarjetas").tag(true)
+                    Text("Lista").tag(false)
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 220)
+            }
+        }
+        .padding(.horizontal)
     }
 
     private var userCards: some View {
@@ -223,16 +220,7 @@ struct UsersListView: View {
                 }
                 .buttonStyle(.plain)
             }
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(Color(.secondarySystemBackground))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(Color.primary.opacity(0.12), lineWidth: 1)
-                    )
-                    .shadow(color: Color.black.opacity(0.08), radius: 4, y: 2)
-            )
+            .cardStyle()
         }
     }
 }
