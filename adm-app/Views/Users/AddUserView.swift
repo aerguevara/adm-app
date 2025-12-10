@@ -14,6 +14,16 @@ struct AddUserView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Nuevo usuario")
+                            .font(.headline)
+                        Text("Completa la información básica y define el punto de partida del progreso.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 Section("Basic Information") {
                     TextField("Display Name", text: $viewModel.displayName)
                         .textInputAutocapitalization(.words)
@@ -37,13 +47,15 @@ struct AddUserView: View {
             }
             .navigationTitle("Add User")
             .navigationBarTitleDisplayMode(.inline)
+            .scrollContentBackground(.hidden)
+            .background(Color(.systemGroupedBackground))
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
                         dismiss()
                     }
                 }
-                
+
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Add") {
                         Task {
@@ -53,6 +65,7 @@ struct AddUserView: View {
                             }
                         }
                     }
+                    .buttonStyle(.borderedProminent)
                     .disabled(!viewModel.isValid)
                 }
             }

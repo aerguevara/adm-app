@@ -49,19 +49,8 @@ struct ActivitiesListView: View {
     
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Label("XP total en vista", systemImage: "bolt.fill")
-                        .foregroundStyle(.orange)
-                        .font(.subheadline.weight(.semibold))
-                    Spacer()
-                    Text("+\(totalXPEarned) XP")
-                        .font(.headline)
-                        .foregroundStyle(.orange)
-                }
-                .padding(.horizontal)
-                .padding(.top, 6)
-
+            VStack(alignment: .leading, spacing: 12) {
+                header
                 userFilterChips
 
                 ScrollView {
@@ -107,6 +96,26 @@ struct ActivitiesListView: View {
             await viewModel.loadActivities()
         }
         .loadingOverlay(isPresented: viewModel.isLoading, message: "Loading activities...")
+        .groupedBackground()
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Actividades")
+                    .font(.title3.weight(.semibold))
+                Text("Filtra por usuario o tipo y revisa el impacto de cada salida")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 8) {
+                InfoChip(text: "\(filteredActivities.count) mostradas", systemImage: "figure.walk", tint: .blue, filled: false)
+                InfoChip(text: "+\(totalXPEarned) XP", systemImage: "bolt.fill", tint: .orange)
+                Spacer()
+            }
+        }
+        .padding(.horizontal)
     }
 
     private var userFilterChips: some View {
@@ -178,17 +187,7 @@ struct ActivityCardView: View {
                 }
             }
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(Color(.secondarySystemBackground))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(Color.primary.opacity(0.12), lineWidth: 1)
-                )
-                .shadow(color: Color.black.opacity(0.08), radius: 4, y: 2)
-        )
+        .cardStyle()
     }
     
     private var distanceString: String {
