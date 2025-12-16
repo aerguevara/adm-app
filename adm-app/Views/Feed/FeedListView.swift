@@ -288,31 +288,20 @@ struct FeedRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: 8) {
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "person.circle.fill")
-                            .foregroundStyle(.blue)
-                        Text(item.displayName)
-                            .font(.subheadline.weight(.semibold))
-                        if item.userLevel > 0 {
-                            InfoChip(text: "Lv \(item.userLevel)", systemImage: "star.fill", tint: .yellow, filled: false)
-                        }
-                        if item.userXP > 0 {
-                            InfoChip(text: "\(item.userXP) XP", systemImage: "bolt.fill", tint: .orange, filled: false)
-                        }
-                    }
-
                     Text(item.feedItem.title)
                         .font(.headline)
+                        .lineLimit(2)
+                    
                     Text(item.feedItem.subtitle)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                        .lineLimit(3)
                 }
-
+                
                 Spacer()
-
+                
                 VStack(alignment: .trailing, spacing: 6) {
                     InfoChip(text: item.feedItem.rarity.capitalized,
                              systemImage: "sparkles",
@@ -337,6 +326,35 @@ struct FeedRow: View {
                     InfoChip(text: "+\(item.feedItem.xpEarned) XP", systemImage: "bolt.fill", tint: .orange)
                 }
             }
+            
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) {
+                    Image(systemName: "person.circle.fill")
+                        .foregroundStyle(.blue)
+                    Text(item.displayName)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.9)
+                        .layoutPriority(2)
+                    Spacer(minLength: 8)
+                }
+                
+                HStack(spacing: 8) {
+                    if item.userLevel > 0 {
+                        InfoChip(text: "Lv \(item.userLevel)", systemImage: "star.fill", tint: .yellow, filled: false)
+                            .layoutPriority(2)
+                    }
+                    if item.userXP > 0 {
+                        InfoChip(text: "\(item.userXP) XP", systemImage: "bolt.fill", tint: .orange, filled: false)
+                            .layoutPriority(2)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .font(.caption)
+            }
+            .padding(8)
+            .background(Color(.secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
         }
         .padding(.vertical, 4)
     }
@@ -382,6 +400,14 @@ class FeedViewModel: ObservableObject {
             
             // Sort by date, most recent first
             feedItemsWithUsers.sort { $0.feedItem.date > $1.feedItem.date }
+            
+            // Debug logs to trace counts and date ranges
+            if let minDate = feedItemsWithUsers.last?.feedItem.date,
+               let maxDate = feedItemsWithUsers.first?.feedItem.date {
+                print("[Feed] Cargados \(feedItemsWithUsers.count) items. Rango fechas: \(minDate) - \(maxDate)")
+            } else {
+                print("[Feed] Cargados \(feedItemsWithUsers.count) items sin rango de fechas")
+            }
         } catch {
             errorMessage = error.localizedDescription
             showError = true

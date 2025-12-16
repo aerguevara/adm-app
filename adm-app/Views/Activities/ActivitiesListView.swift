@@ -186,6 +186,15 @@ struct ActivityCardView: View {
                     }
                 }
             }
+            
+            HStack(spacing: 8) {
+                Image(systemName: item.activity.route.isEmpty ? "xmark.octagon" : "checkmark.seal.fill")
+                    .foregroundStyle(item.hasRoutes ? .green : .red)
+                Text(item.hasRoutes ? "Con rutas" : "Sin rutas")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(item.hasRoutes ? .green : .red)
+            }
+            .padding(.top, 2)
         }
         .cardStyle()
     }
@@ -216,6 +225,7 @@ struct ActivityCardView: View {
 struct ActivityWithUser: Identifiable {
     let activity: ActivitySession
     let user: User?
+    var routeCount: Int?
     
     var id: String {
         activity.id ?? UUID().uuidString
@@ -227,6 +237,13 @@ struct ActivityWithUser: Identifiable {
     
     var userLevel: Int {
         user?.level ?? 0
+    }
+    
+    var hasRoutes: Bool {
+        if let routeCount, routeCount > 0 {
+            return true
+        }
+        return !activity.route.isEmpty
     }
 }
 
@@ -254,15 +271,57 @@ class ActivitiesViewModel: ObservableObject {
             })
             
             var combined = activities.map { activity in
-                ActivityWithUser(activity: activity, user: userDictionary[activity.userId])
+                ActivityWithUser(
+                    activity: activity,
+                    user: userDictionary[activity.userId],
+                    routeCount: activity.route.isEmpty ? nil : activity.route.count
+                )
             }
             
             combined.sort { $0.activity.endDate > $1.activity.endDate }
             self.activities = combined
+            Task { await self.loadRouteCountsIfNeeded() }
         } catch {
             errorMessage = error.localizedDescription
             showError = true
         }
         isLoading = false
+    }
+    
+    private func loadRouteCountsIfNeeded() async {
+        let itemsNeedingRoutes = activities.filter { $0.routeCount == nil && ($0.activity.id != nil) }
+        guard !itemsNeedingRoutes.isEmpty else { return }
+        
+        await withTaskGroup(of: (String, Int)?.self) { group in
+            for item in itemsNeedingRoutes {
+                guard let id = item.activity.id else { continue }
+                group.addTask {
+                    do {
+                        let count = try await self.firebaseManager.fetchRouteCount(for: id)
+                        return (id, count)
+                    } catch {
+                        return nil
+                    }
+                }
+            }
+            
+            var routeCounts: [String: Int] = [:]
+            for await result in group {
+                if let (id, count) = result {
+                    routeCounts[id] = count
+                }
+            }
+            
+            guard !routeCounts.isEmpty else { return }
+            
+            await MainActor.run {
+                self.activities = self.activities.map { item in
+                    guard let id = item.activity.id, let count = routeCounts[id] else { return item }
+                    var updated = item
+                    updated.routeCount = count
+                    return updated
+                }
+            }
+        }
     }
 }

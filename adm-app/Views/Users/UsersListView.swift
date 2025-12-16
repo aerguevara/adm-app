@@ -216,7 +216,7 @@ struct UsersListView: View {
                 }
 
                 NavigationLink(destination: UserDetailView(user: user)) {
-                    UserRow(user: user)
+                    UserRow(user: user, stats: viewModel.statsByUserId[user.id ?? ""])
                 }
                 .buttonStyle(.plain)
             }
@@ -227,6 +227,7 @@ struct UsersListView: View {
 
 struct UserRow: View {
     let user: User
+    let stats: UserStats?
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -250,6 +251,14 @@ struct UserRow: View {
                     Spacer()
                     InfoChip(text: "Joined \(user.joinedAt.shortDate)", systemImage: "calendar", tint: .blue, filled: false)
                 }
+                
+                if let stats {
+                    HStack(spacing: 8) {
+                        InfoChip(text: "Act \(stats.activities)", systemImage: "figure.walk", tint: .green, filled: false)
+                        InfoChip(text: "Feed \(stats.feed)", systemImage: "list.bullet", tint: .purple, filled: false)
+                        InfoChip(text: "Terr \(stats.territories)", systemImage: "map", tint: .blue, filled: false)
+                    }
+                }
             }
         }
         .padding(.vertical, 4)
@@ -260,9 +269,11 @@ struct UserRow: View {
 class UsersViewModel: ObservableObject {
     @Published var users: [User] = []
     @Published var isLoading = false
+    @Published var isLoadingStats = false
     @Published var isMasterWiping = false
     @Published var showError = false
     @Published var errorMessage = ""
+    @Published var statsByUserId: [String: UserStats] = [:]
     
     private let firebaseManager = FirebaseManager.shared
     private var listenerRegistration: ListenerRegistration?
@@ -287,6 +298,7 @@ class UsersViewModel: ObservableObject {
             
             self.users = users.sorted { $0.joinedAt > $1.joinedAt }
             self.isLoading = false
+            Task { await self.loadStats(for: users) }
         }
     }
     
@@ -396,6 +408,48 @@ class UsersViewModel: ObservableObject {
         }
     }
     
+    func loadStats(for users: [User]) async {
+        isLoadingStats = true
+        var newStats: [String: UserStats] = [:]
+        
+        await withTaskGroup(of: (String, UserStats)?.self) { group in
+            for user in users {
+                guard let userId = user.id else { continue }
+                group.addTask {
+                    do {
+                        async let activitiesTask = self.firebaseManager.fetchActivities(filterUserId: userId)
+                        async let feedItemsTask = self.firebaseManager.fetchFeedItems(for: userId)
+                        async let territoriesTask = self.firebaseManager.fetchTerritories(for: userId)
+                        
+                        let activities = try await activitiesTask
+                        let feedItems = try await feedItemsTask
+                        let territories = try await territoriesTask
+                        
+                        let stats = UserStats(
+                            activities: activities.count,
+                            feed: feedItems.count,
+                            territories: territories.count
+                        )
+                        return (userId, stats)
+                    } catch {
+                        return nil
+                    }
+                }
+            }
+            
+            for await result in group {
+                if let (userId, stats) = result {
+                    newStats[userId] = stats
+                }
+            }
+        }
+        
+        await MainActor.run {
+            self.statsByUserId = newStats
+            self.isLoadingStats = false
+        }
+    }
+    
     func closeWeeklyRanking() async {
         isLoading = true
         
@@ -421,6 +475,12 @@ class UsersViewModel: ObservableObject {
         
         isLoading = false
     }
+}
+
+struct UserStats {
+    let activities: Int
+    let feed: Int
+    let territories: Int
 }
 
 #Preview {

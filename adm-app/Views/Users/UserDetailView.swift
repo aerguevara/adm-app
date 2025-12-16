@@ -72,6 +72,15 @@ struct UserDetailView: View {
                 TextField("Email", text: $viewModel.email)
                     .textInputAutocapitalization(.never)
                     .keyboardType(.emailAddress)
+                
+                HStack {
+                    Text("Force Logout Version")
+                    Spacer()
+                    TextField("Version", value: $viewModel.forceLogoutVersion, format: .number)
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 120)
+                }
             }
             
             Section("Stats") {
@@ -360,6 +369,7 @@ class UserDetailViewModel: ObservableObject {
     @Published var previousRank: Int
     @Published var joinedAt: Date
     @Published var lastUpdated: Date?
+    @Published var forceLogoutVersion: Int?
     @Published var showError = false
     @Published var errorMessage = ""
     @Published var territories: [RemoteTerritory] = []
@@ -389,6 +399,7 @@ class UserDetailViewModel: ObservableObject {
         self.previousRank = user.previousRank ?? 0
         self.joinedAt = user.joinedAt
         self.lastUpdated = user.lastUpdated
+        self.forceLogoutVersion = user.forceLogoutVersion
     }
     
     func saveUser() async {
@@ -401,7 +412,8 @@ class UserDetailViewModel: ObservableObject {
             lastUpdated: Date(), // Update timestamp
             level: level,
             xp: xp,
-            previousRank: previousRank == 0 ? nil : previousRank
+            previousRank: previousRank == 0 ? nil : previousRank,
+            forceLogoutVersion: forceLogoutVersion
         )
         
         do {

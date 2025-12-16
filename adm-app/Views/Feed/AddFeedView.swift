@@ -14,6 +14,30 @@ struct AddFeedView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("Usuario") {
+                    if viewModel.isLoadingUsers {
+                        ProgressView("Cargando usuarios...")
+                    } else if viewModel.users.isEmpty {
+                        ContentUnavailableView {
+                            Label("Sin usuarios", systemImage: "person.slash")
+                        } description: {
+                            Text("No hay usuarios disponibles para asignar el feed")
+                        }
+                    } else {
+                        Picker("Selecciona usuario", selection: $viewModel.userId) {
+                            ForEach(viewModel.users, id: \.id) { user in
+                                if let id = user.id {
+                                    Text(user.displayName.isEmpty ? (user.email ?? "Sin nombre") : user.displayName)
+                                        .tag(id)
+                                }
+                            }
+                        }
+                        .onChange(of: viewModel.userId) { _, newValue in
+                            viewModel.updateRelatedNameForSelectedUser(newValue)
+                        }
+                    }
+                }
+                
                 Section("Content") {
                     TextField("Title", text: $viewModel.title)
                     
@@ -83,6 +107,9 @@ struct AddFeedView: View {
             } message: {
                 Text(viewModel.errorMessage)
             }
+            .task {
+                await viewModel.loadUsers()
+            }
         }
     }
 }
@@ -99,11 +126,38 @@ class AddFeedViewModel: ObservableObject {
     @Published var isPersonal = true
     @Published var showError = false
     @Published var errorMessage = ""
+    @Published var users: [User] = []
+    @Published var isLoadingUsers = false
     
     private let firebaseManager = FirebaseManager.shared
     
     var isValid: Bool {
         !title.isEmpty && !subtitle.isEmpty && !userId.isEmpty
+    }
+    
+    func loadUsers() async {
+        isLoadingUsers = true
+        defer { isLoadingUsers = false }
+        do {
+            let fetched = try await firebaseManager.fetchUsers()
+            users = fetched
+                .filter { $0.id != nil }
+                .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+            if userId.isEmpty, let firstId = users.first?.id {
+                userId = firstId
+                updateRelatedNameForSelectedUser(firstId)
+            } else if !userId.isEmpty {
+                updateRelatedNameForSelectedUser(userId)
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+    
+    func updateRelatedNameForSelectedUser(_ id: String) {
+        guard let selected = users.first(where: { $0.id == id }) else { return }
+        relatedUserName = selected.displayName
     }
     
     func addFeedItem() async {

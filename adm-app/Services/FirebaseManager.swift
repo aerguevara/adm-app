@@ -110,6 +110,14 @@ class FirebaseManager: ObservableObject {
         }
     }
     
+    func fetchRouteCount(for activityId: String) async throws -> Int {
+        let snapshot = try await db.collection(FirebaseCollection.activities)
+            .document(activityId)
+            .collection("routes")
+            .getDocuments(source: .server)
+        return snapshot.documents.count
+    }
+    
     func addDocument<T: Encodable>(to collection: String, data: T) async throws -> String {
         let docRef = try db.collection(collection).addDocument(from: data)
         return docRef.documentID
